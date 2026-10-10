@@ -71,3 +71,7 @@ pre:empty { display: none; }
 .thumb .sub { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thumb.annotating { border-color: var(--accent); } .thumb.labeled { border-color: var(--ok); }
 #metrics-list a { margin-right: 10px; cursor: pointer; color: var(--accent); }
+
+.sc-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.sc-item img { width: 100%; height: auto; display: block; border-radius: 6px; margin-bottom: 6px; }
+.sc-item ul { margin: 4px 0 0; padding-left: 18px; }

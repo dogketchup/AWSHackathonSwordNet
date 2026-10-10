@@ -25,7 +25,7 @@ document.querySelectorAll("nav button").forEach((b) => b.onclick = () => showTab
 function showTab(name) {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === `tab-${name}`));
-  ({ upload: loadDatasets, images: loadImages, annotate: loadQueue, reports: loadRuns, cluster: loadCluster, logs: loadLogs })[name]();
+  ({ upload: loadDatasets, images: loadImages, annotate: loadQueue, reports: loadRuns, samcheck: loadSamCheck, cluster: loadCluster, logs: loadLogs })[name]();
 }
 
 async function refreshStats() {
@@ -444,3 +444,27 @@ window.addEventListener("pagehide", () => {
 setInterval(refreshStats, 15000);
 api("/api/config").then((c) => { CLASSES = c.classes; classButtons(); });
 loadDatasets();
+
+// --- SAM check ---------------------------------------------------------------
+async function loadSamCheck() {
+  let r;
+  try { r = await api("/api/samcheck"); } catch (e) { $("#sc-summary").textContent = e.message; return; }
+  if (!r.results.length) {
+    $("#sc-summary").textContent = "No results yet. Run the command above, then reopen this tab.";
+    $("#sc-grid").innerHTML = "";
+    return;
+  }
+  const kept = r.boxes - r.tightened;
+  $("#sc-summary").textContent = `${r.images} images · ${r.boxes} boxes · ${r.tightened} tightened · ${kept} kept as drawn` +
+    (r.time ? ` · run ${new Date(r.time * 1000).toLocaleString()}` : "");
+  $("#sc-grid").innerHTML = r.results.map((x) => {
+    const notes = x.boxes.filter((b) => !b.tightened).map((b) => `${esc(b.cls)}: ${esc(b.note)}`);
+    const ok = x.boxes.filter((b) => b.tightened).length;
+    return `<div class="card sc-item">
+      ${x.png ? `<img src="/api/samcheck/img/${encodeURIComponent(x.png)}" alt="${esc(x.name)}" loading="lazy">` : ""}
+      <div><b>${esc(x.name)}</b> <span class="hint">${ok}/${x.boxes.length} tightened · ${x.seconds} s</span></div>
+      ${x.error ? `<div class="status-failed">${esc(x.error)}</div>` : ""}
+      ${notes.length ? `<ul class="hint">${notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
+    </div>`;
+  }).join("");
+}

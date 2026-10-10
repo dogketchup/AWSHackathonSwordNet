@@ -284,4 +284,26 @@ def get_logs(source: str | None = None, run_id: int | None = None, level: str | 
             "entries": logs.query(source=source, run_id=run_id, level=level, after=after, text=q, limit=limit)}
 
 
+# --- SAM check (read-only preview of the SAM annotator; see refine/sam_check.py) ----
+
+SAMCHECK_DIR = config.HOME / "samcheck"
+
+
+@app.get("/api/samcheck")
+def samcheck():
+    path = SAMCHECK_DIR / "results.json"
+    if not path.exists():
+        return {"results": [], "images": 0, "boxes": 0, "tightened": 0}
+    import json
+    return json.loads(path.read_text())
+
+
+@app.get("/api/samcheck/img/{name}")
+def samcheck_img(name: str):
+    path = SAMCHECK_DIR / "img" / Path(name).name
+    if path.suffix != ".png" or not path.exists():
+        raise HTTPException(404)
+    return FileResponse(path)
+
+
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
