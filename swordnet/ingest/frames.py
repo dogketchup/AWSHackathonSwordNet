@@ -10,11 +10,18 @@ from pathlib import Path
 import cv2
 
 from swordnet import config
-from swordnet.storage import store
 
 
-def extract(video_path, dataset, every_s=0.5, max_frames=2000):
+def extract(video_path, dataset, every_s=0.5, max_frames=2000, out_dir=None, register=True):
+    """Sample frames from a video.
+
+    register=True: write them into INGEST_DIR and the local store; returns sample ids.
+    register=False: only write the files into out_dir; returns [(path, origin)] for the caller
+    to send to the team database.
+    """
     video_path = Path(video_path)
+    out_dir = Path(out_dir or config.INGEST_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise ValueError(f"cannot open video {video_path}")
@@ -27,11 +34,16 @@ def extract(video_path, dataset, every_s=0.5, max_frames=2000):
         if not ok:
             break
         if idx % step == 0:
-            path = config.INGEST_DIR / f"{video_path.stem}_f{idx:06d}.jpg"
+            path = out_dir / f"{video_path.stem}_f{idx:06d}.jpg"
             cv2.imwrite(str(path), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
-            sid = store.add_image(path, dataset, f"video:{video_path.name}#{idx}")
-            if sid:  # None: the same video (or a frame of it) was uploaded before
-                ids.append(sid)
+            origin = f"video:{video_path.name}#{idx}"
+            if not register:
+                ids.append((path, origin))
+            else:
+                from swordnet.storage import store
+                sid = store.add_image(path, dataset, origin)
+                if sid:  # None: the same video (or a frame of it) was uploaded before
+                    ids.append(sid)
         idx += 1
     cap.release()
     return ids

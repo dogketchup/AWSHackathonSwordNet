@@ -223,8 +223,9 @@ async function done() {
   if (!A.image) { $("#an-info").textContent = "No image loaded: the queue is empty, or press Next."; return; }
   // Accepting an image confirms its boxes, including auto-label proposals the labeler kept.
   A.labels = A.labels.map((l) => ({ ...l, source: touched(l.source) }));
-  await save();
-  await api(`/api/images/${A.image.id}/processed`, { method: "POST" });
+  $("#an-info").textContent = "Saving to the team database…";
+  await api(`/api/images/${A.image.id}/processed`, json("POST", { labels: A.labels }));
+  A.dirty = false;
   A.image = null;
   if (queueMode()) return loadQueue();
   A.pos = Math.min(A.pos + 1, Math.max(0, A.queue.length - 1));
