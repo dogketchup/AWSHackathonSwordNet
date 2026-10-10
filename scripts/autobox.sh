@@ -13,9 +13,13 @@ args=()
 while [ $# -gt 0 ]; do
   if [ "$1" = "--ingest" ]; then
     dir="$2"; shift 2
+    [ -d "$dir" ] || { echo "no such folder: $dir" >&2; exit 1; }
+    n=$(find "$dir" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" -o -iname "*.bmp" -o -iname "*.mp4" -o -iname "*.mov" -o -iname "*.avi" -o -iname "*.mkv" -o -iname "*.webm" \) | wc -l | tr -d " ")
+    [ "$n" -gt 0 ] || { echo "no photos or videos in $dir: drop some in first" >&2; exit 1; }
+    echo "$n photos/videos found"
     stamp="incoming-$(date +%s)"
     echo "uploading $dir to $SEAT ..."
-    tar czf - -C "$dir" . | kubectl exec -i "$SEAT" -c app -- bash -c "mkdir -p $TOOLS/$stamp && tar xzf - -C $TOOLS/$stamp"
+    COPYFILE_DISABLE=1 tar --no-mac-metadata -czf - -C "$dir" . | kubectl exec -i "$SEAT" -c app -- bash -c "mkdir -p $TOOLS/$stamp && tar xzf - -C $TOOLS/$stamp"
     args+=(--ingest "$TOOLS/$stamp")
   else
     args+=("$1"); shift
