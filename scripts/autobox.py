@@ -73,7 +73,7 @@ def claim_one(sid: str) -> bool:
     return True
 
 
-def one_per_object(xyxy, scores, classes, rel=0.5, inside=0.6, encloses=0.85):
+def one_per_object(xyxy, scores, classes, rel=0.2, inside=0.6, encloses=0.85):
     """One box per sword: drop boxes scoring under `rel` x the image's best, then drop any box that
     lies mostly (> `inside` of its area) within a stronger kept box, or that wraps (> `encloses`)
     a stronger kept box. Crossed swords overlap but don't wrap each other, so both survive."""
@@ -104,8 +104,12 @@ def one_per_object(xyxy, scores, classes, rel=0.5, inside=0.6, encloses=0.85):
 def detector(min_conf: float):
     from ultralytics import YOLOE
     prompts = S.prompts()                      # {"sword": "a sword", "stick": "a wooden stick"}
-    classes, texts = list(prompts), list(prompts.values())
-    model = YOLOE(os.environ.get("AUTOBOX_MODEL", "yoloe-11s-seg.pt"))
+    # Extra sword-like phrasings find more of the blades in multi-fencer frames (tested on a sparring
+    # clip: frames with no box fell from 96 to 32 of 194). They are all labeled with the first class.
+    extra = ["a fencing sword", "a long thin blade", "a metal rod"]
+    classes = list(prompts) + [list(prompts)[0]] * len(extra)
+    texts = list(prompts.values()) + extra
+    model = YOLOE(os.environ.get("AUTOBOX_MODEL", "yoloe-11l-seg.pt"))
     model.set_classes(texts, model.get_text_pe(texts))
 
     def detect(path: str, w: int, h: int) -> list:
@@ -128,7 +132,7 @@ def main():
     ap.add_argument("--ingest", help="folder of images/videos to upload first (the normal ingest path)")
     ap.add_argument("--limit", type=int, default=200, help="max queue images to label this run")
     ap.add_argument("--submit-conf", type=float, default=0.35)
-    ap.add_argument("--min-conf", type=float, default=0.15)
+    ap.add_argument("--min-conf", type=float, default=0.10)
     ap.add_argument("--dry-run", action="store_true", help="detect and report only; change nothing")
     a = ap.parse_args()
 
