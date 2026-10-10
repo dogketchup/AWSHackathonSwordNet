@@ -1,4 +1,5 @@
-# Core: web UI, storage, ingest
+# Laptop: web UI, FiftyOne DB, bridge. (The pods get their own deps from `bridge setup`.)
+fiftyone>=1.0
 fastapi>=0.110
 uvicorn>=0.29
 python-multipart>=0.0.9
@@ -7,13 +8,7 @@ numpy>=1.26
 opencv-python-headless>=4.9
 pillow>=10.0
 pyyaml>=6.0
-
-# Training, SAM refine, local deploy (ultralytics ships YOLO-OBB and SAM)
-ultralytics>=8.3
-
-# Auto-labeler only (Grounding DINO / OWLv2). Heavy; skip if auto-label stays off.
-transformers>=4.45
-torch>=2.2
-
-# Tests
 pytest>=8.0
+
+# Only for running weights locally (scripts/get_weights.sh --serve installs it on demand):
+# ultralytics>=8.3

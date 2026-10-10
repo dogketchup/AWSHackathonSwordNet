@@ -10,7 +10,7 @@ from pathlib import Path
 import cv2
 
 from swordnet import config
-from swordnet.storage import db
+from swordnet.storage import store
 
 
 def extract(video_path, dataset, every_s=0.5, max_frames=2000):
@@ -22,17 +22,15 @@ def extract(video_path, dataset, every_s=0.5, max_frames=2000):
     step = max(1, round(fps * every_s))
     config.ensure_dirs()
     ids, idx = [], 0
-    with db.session() as con:
-        while len(ids) < max_frames:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            if idx % step == 0:
-                name = f"{video_path.stem}_f{idx:06d}.jpg"
-                cv2.imwrite(str(config.INGEST_DIR / name), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
-                h, w = frame.shape[:2]
-                ids.append(db.add_image(con, dataset, name, f"video:{video_path.name}#{idx}", w, h))
-            idx += 1
+    while len(ids) < max_frames:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        if idx % step == 0:
+            path = config.INGEST_DIR / f"{video_path.stem}_f{idx:06d}.jpg"
+            cv2.imwrite(str(path), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
+            ids.append(store.add_image(path, dataset, f"video:{video_path.name}#{idx}"))
+        idx += 1
     cap.release()
     return ids
 

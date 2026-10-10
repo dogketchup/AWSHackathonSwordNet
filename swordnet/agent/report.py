@@ -3,10 +3,12 @@
 Runs on the agent seat, called by the bridge after a run finishes:
     kubectl exec -i seat-145 -- python -m swordnet.agent.report < run.json > report.md
 
-The numbers and findings sections are generated directly from evaluate.py's output, so they
-are always right. The agent (Qwen on Trainium) writes only the analysis section, and it is
-given the findings rather than asked to discover them; if the server is down, the report is
-still complete, just without that section.
+The numbers and findings sections are generated directly from metrics/evaluate.py's output,
+so they are always right. An agent writes only the analysis section, and it is given the
+findings rather than asked to discover them. gpt-oss-20b writes it when GPTOSS_BASE_URL is set
+(the bridge then renders the report on the laptop); otherwise the bridge runs this module on
+the agent seat and Qwen3 writes it. If neither answers, the report is still complete, just
+without that section.
 """
 import json
 import sys
@@ -26,6 +28,9 @@ Write 5-10 short bullet points for the people labeling data and planning runs:
 - What the humans may have missed: label quality, val leakage, class balance, image size vs
   thin objects like blades, speed vs accuracy for deployment, whether more data or more epochs
   is the better next investment.
+Rules: only call a run overfitting, underfitting or converged if the automatic findings say so;
+if there are no such findings, say the curves are inconclusive. With fewer than 10 epochs, say it
+is too short to judge convergence. Thin objects like blades get *more* pixels with a larger imgsz.
 Be concrete and cite numbers. No preamble."""
 
 
@@ -33,7 +38,7 @@ def _fmt(v):
     return "-" if v is None else (f"{v:.4f}" if isinstance(v, float) else str(v))
 
 
-def render(run, previous=()):
+def render(run, previous=(), which="qwen"):
     m = run.get("metrics") or {}
     cfg = run.get("config") or {}
     ds = m.get("dataset") or {}
@@ -74,7 +79,7 @@ def render(run, previous=()):
                          f"{_fmt(pm.get('best_mAP50_95'))} | {_fmt(pm.get('fps'))} |")
 
     analysis = None
-    if m and llm.available():
+    if m and llm.available(which):
         try:
             analysis = llm.chat(ANALYSIS_PROMPT.format(
                 run_no=run["id"], model=run["model"], config=json.dumps(cfg), dataset=json.dumps(ds),
@@ -82,14 +87,15 @@ def render(run, previous=()):
                 findings=json.dumps(m.get("findings", [])),
                 previous=json.dumps([{"id": p["id"], "model": p["model"], "n_train": p.get("n_train"),
                                       "best_mAP50_95": (p.get("metrics") or {}).get("best_mAP50_95")}
-                                     for p in previous])), max_tokens=1200)
+                                     for p in previous])), which=which, max_tokens=1500)
         except Exception as e:
             analysis = f"_Agent analysis failed: {e}_"
-    lines += ["", "## Agent analysis (Qwen3 on Trainium)", "",
+    who = {"qwen": "Qwen3-8B on our Trainium chip", "gptoss": "gpt-oss-20b on Trainium"}[which]
+    lines += ["", f"## Agent analysis ({who})", "",
               analysis or "_Agent unavailable; numbers and findings above are complete._", ""]
     return "\n".join(lines)
 
 
 if __name__ == "__main__":
     req = json.load(sys.stdin)
-    print(render(req["run"], req.get("previous", [])))
+    print(render(req["run"], req.get("previous", []), req.get("llm", "qwen")))

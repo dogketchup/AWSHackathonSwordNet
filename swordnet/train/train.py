@@ -27,7 +27,7 @@ def run(dataset, run_dir, cfg):
     import torch
     from ultralytics import YOLO
 
-    from swordnet.train import evaluate
+    from swordnet.metrics import evaluate
 
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -47,7 +47,11 @@ def run(dataset, run_dir, cfg):
     kwargs.setdefault("imgsz", 640)
     kwargs.setdefault("patience", 20)
     device = 0 if torch.cuda.is_available() else "cpu"
-    workers = min(8, os.cpu_count() or 4)
+    # On seats with another job (seat-145 serves Qwen), the bridge caps our CPU threads.
+    threads = int(os.environ.get("SWORDNET_TORCH_THREADS", 0)) or None
+    if threads:
+        torch.set_num_threads(threads)
+    workers = min(8, threads or os.cpu_count() or 4)
     (run_dir / "config.json").write_text(json.dumps({"model": model_name, **kwargs, "device": str(device)}, indent=2))
 
     model = YOLO(f"{model_name}.pt")

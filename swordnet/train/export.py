@@ -20,7 +20,7 @@ from collections import Counter
 from pathlib import Path
 
 from swordnet import config
-from swordnet.storage import db
+from swordnet.storage import store
 
 
 def group_key(img):
@@ -53,21 +53,22 @@ def export(out_dir, val_fraction=config.VAL_FRACTION):
     counts = {"train": Counter(), "val": Counter()}
     n_img = Counter()
     sources = Counter()
-    with db.session() as con:
-        for img in db.list_images(con, status="labeled", limit=10**9):
-            src = db.image_path(img)
-            if not src.exists() or not img["width"]:
-                continue
-            split = split_of(img, val_fraction)
-            labels = db.get_labels(con, img["id"])
-            shutil.copy2(src, out / "images" / split / img["filename"])
-            lines = [label_line(lb, img["width"], img["height"]) for lb in labels]
-            # An image with no objects is a valid negative example: empty label file.
-            (out / "labels" / split / (Path(img["filename"]).stem + ".txt")).write_text("\n".join(lines))
-            n_img[split] += 1
-            for lb in labels:
-                counts[split][config.CLASSES[lb["cls"]]] += 1
-                sources[lb["source"].split(":")[0].split("+")[0]] += 1
+    view = store.dataset().match(store.fo.ViewField("status") == "labeled")
+    for s in view:
+        src = Path(s.filepath)
+        if not src.exists():
+            continue
+        img = {"filename": s.filename, "origin": s.origin}
+        split = split_of(img, val_fraction)
+        labels = store.get_labels(s)
+        shutil.copy2(src, out / "images" / split / s.filename)
+        lines = [label_line(lb, s.metadata.width, s.metadata.height) for lb in labels]
+        # An image with no objects is a valid negative example: empty label file.
+        (out / "labels" / split / (src.stem + ".txt")).write_text("\n".join(lines))
+        n_img[split] += 1
+        for lb in labels:
+            counts[split][config.CLASSES[lb["cls"]]] += 1
+            sources[lb["source"].split(":")[0].split("+")[0]] += 1
 
     (out / "data.yaml").write_text(
         f"path: {out.resolve()}\ntrain: images/train\nval: images/val\n"

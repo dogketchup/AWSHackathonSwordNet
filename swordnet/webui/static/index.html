@@ -11,10 +11,14 @@
   <h1>SwordNet</h1>
   <nav>
     <button data-tab="upload" class="active">Upload</button>
+    <button data-tab="images">Images</button>
     <button data-tab="annotate">Annotate</button>
     <button data-tab="reports">Reports</button>
+    <button data-tab="cluster">Cluster</button>
+    <button data-tab="logs">Logs</button>
   </nav>
   <span id="stats"></span>
+  <button id="who" title="Change your labeler name"></button>
 </header>
 
 <main>
@@ -41,13 +45,28 @@
     </div>
   </section>
 
+  <!-- Images ---------------------------------------------------------------->
+  <section id="tab-images" class="tab">
+    <div class="toolbar" id="im-filters">
+      <button data-state="" class="active">All <b id="im-n-all"></b></button>
+      <button data-state="pending"><span class="dot"></span>Pending label <b id="im-n-pending"></b></button>
+      <button data-state="annotating"><span class="dot busy"></span>Annotating <b id="im-n-annotating"></b></button>
+      <button data-state="labeled"><span class="dot ok"></span>Labeled <b id="im-n-labeled"></b></button>
+      <span class="sep"></span>
+      <select id="im-dataset"><option value="">All datasets</option></select>
+    </div>
+    <div class="grid" id="im-grid"></div>
+    <p class="hint" id="im-foot"></p>
+  </section>
+
   <!-- Annotate -------------------------------------------------------------->
   <section id="tab-annotate" class="tab">
     <div class="toolbar">
-      <select id="an-filter"><option value="ingest">To label</option><option value="labeled">Labeled</option></select>
+      <select id="an-filter"><option value="ingest">Queue: next to label</option><option value="labeled">Browse labeled</option></select>
       <button id="an-prev">&larr; Prev</button>
       <span id="an-pos"></span>
       <button id="an-next">Next &rarr;</button>
+      <button id="an-skip">Skip</button>
       <span class="sep"></span>
       <span id="an-classes"></span>
       <span class="sep"></span>
@@ -71,6 +90,34 @@
       </div>
       <div class="card" id="report"><p class="hint">Pick a run to read its report.</p></div>
     </div>
+    <div class="card">
+      <h2>Metrics files <span class="hint">(data/metrics/)</span></h2>
+      <div id="metrics-list" class="hint">None yet.</div>
+      <pre id="metrics-view"></pre>
+    </div>
+  </section>
+
+  <!-- Cluster --------------------------------------------------------------->
+  <section id="tab-cluster" class="tab">
+    <div class="tiles" id="cl-tiles"></div>
+    <div class="seats" id="cl-seats"><p class="hint">Asking the pods… (first look takes ~10 s)</p></div>
+    <div class="card">
+      <h2>Recent pipeline events</h2>
+      <table id="cl-events"><tbody></tbody></table>
+    </div>
+    <p class="hint" id="cl-foot"></p>
+  </section>
+
+  <!-- Logs ------------------------------------------------------------------>
+  <section id="tab-logs" class="tab">
+    <div class="toolbar">
+      <select id="lg-source"><option value="">All sources</option></select>
+      <select id="lg-level"><option value="">All levels</option><option>info</option><option>warning</option><option>error</option></select>
+      <input id="lg-run" type="number" placeholder="run #" style="width:90px">
+      <input id="lg-q" placeholder="search text">
+      <label><input id="lg-follow" type="checkbox" checked> follow</label>
+    </div>
+    <div class="card"><table id="lg-table"><thead><tr><th>time</th><th>level</th><th>source</th><th>run</th><th>message</th></tr></thead><tbody></tbody></table></div>
   </section>
 </main>
 <script src="/static/app.js"></script>

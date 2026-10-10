@@ -8,6 +8,7 @@ Remote scraping agents don't need this module: they POST images to the web UI's 
 import argparse
 import hashlib
 import io
+from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 
@@ -15,7 +16,7 @@ import httpx
 from PIL import Image
 
 from swordnet import config
-from swordnet.storage import db
+from swordnet.storage import store
 
 MIN_SIDE = 160  # smaller than this is an icon or thumbnail
 HEADERS = {"User-Agent": "SwordNet-scraper/0.1 (research dataset)"}
@@ -44,16 +45,15 @@ def _image_urls(client, url):
     return [urljoin(url, s) for s in dict.fromkeys(parser.srcs)], {}
 
 
-def _known_hashes(con):
-    return {r["filename"].split("_", 1)[0] for r in con.execute(
-        "SELECT filename FROM images WHERE filename LIKE 'scr%'")}
+def _known_hashes():
+    return {Path(f).name.split("_", 1)[0] for f in store.dataset().values("filepath") if Path(f).name.startswith("scr")}
 
 
 def scrape(urls, dataset, limit=200):
     config.ensure_dirs()
     added = []
-    with httpx.Client(headers=HEADERS, timeout=20, follow_redirects=True) as client, db.session() as con:
-        seen = _known_hashes(con)
+    with httpx.Client(headers=HEADERS, timeout=20, follow_redirects=True) as client:
+        seen = _known_hashes()
         for page in urls:
             try:
                 img_urls, cache = _image_urls(client, page)
@@ -74,9 +74,9 @@ def scrape(urls, dataset, limit=200):
                 if h in seen:
                     continue
                 seen.add(h)
-                name = f"{h}_.jpg"
-                im.save(config.INGEST_DIR / name, quality=92)
-                added.append(db.add_image(con, dataset, name, f"scrape:{u}", *im.size))
+                path = config.INGEST_DIR / f"{h}_.jpg"
+                im.save(path, quality=92)
+                added.append(store.add_image(path, dataset, f"scrape:{u}"))
     return added
 
 

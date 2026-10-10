@@ -16,6 +16,7 @@ import sys
 
 from swordnet.agent import llm
 
+FLEX_MODELS = ["yolo11n-obb", "yolo11s-obb", "yolo11m-obb", "yolo11l-obb"]
 LIMITS = {"epochs": (5, 300), "imgsz": (320, 1280), "batch": (2, 64), "lr0": (1e-5, 0.1)}
 OPTIONAL = {"lr0", "mosaic", "mixup", "degrees", "fliplr", "scale", "cos_lr", "patience", "weight_decay"}
 
@@ -23,7 +24,8 @@ PROMPT = """You plan YOLO-OBB training runs for SwordNet, a detector for swords 
 (oriented boxes). Training is on CPU (11 cores per seat), so a run's cost grows with
 epochs x images x model size. Each seat has a fixed model size.
 
-Seats and their models:
+Seats and their models ("flex" = you choose the model for that seat; use flex seats to test
+the idea most likely to help: another model size, a different imgsz, or stronger augmentation):
 {seats}
 
 Current dataset snapshot:
@@ -57,7 +59,7 @@ def summarize_history(history, n=8):
     return out
 
 
-def validate(plan, seats):
+def validate(plan, seats, n_train=None):
     """Return a list of concrete problems; empty means the plan is usable."""
     errs = []
     runs = plan.get("runs") if isinstance(plan, dict) else None
@@ -73,7 +75,10 @@ def validate(plan, seats):
         seat = r.get("seat")
         if seat not in seats:
             errs.append(f"unknown seat {seat!r}; seats are {list(seats)}"); continue
-        if r.get("model") != seats[seat]:
+        if seats[seat] == "flex":
+            if r.get("model") not in FLEX_MODELS:
+                errs.append(f"{seat} is a flex seat; model must be one of {FLEX_MODELS}, got {r.get('model')!r}")
+        elif r.get("model") != seats[seat]:
             errs.append(f"{seat} runs {seats[seat]}, not {r.get('model')!r}")
         for k, (lo, hi) in LIMITS.items():
             if k not in r:
@@ -85,6 +90,9 @@ def validate(plan, seats):
                 errs.append(f"{seat}: {k}={v!r} must be a number in [{lo}, {hi}]")
         if isinstance(r.get("imgsz"), int) and r["imgsz"] % 32:
             errs.append(f"{seat}: imgsz={r['imgsz']} is not a multiple of 32")
+        if n_train and isinstance(r.get("batch"), int) and r["batch"] > max(2, n_train // 2):
+            errs.append(f"{seat}: batch={r['batch']} is too large for {n_train} training images; "
+                        f"use at most {max(2, n_train // 2)} so each epoch has several steps")
     return errs
 
 
@@ -92,11 +100,16 @@ def fallback(seats, history):
     """Deterministic schedule: epochs grow with each round, capped by size."""
     rounds = len({r.get("n_train") for r in history})
     base = {"n": 120, "s": 100, "m": 80, "l": 60, "x": 50}
+    # flex seats: the small model at a larger and a smaller image size, the cheapest useful contrast
+    flex_imgsz = iter([800, 512, 640, 640])
     runs = []
     for seat, model in seats.items():
+        imgsz = 640
+        if model == "flex":
+            model, imgsz = "yolo11s-obb", next(flex_imgsz)
         size = model.removeprefix("yolo11").split("-")[0]
         runs.append({"seat": seat, "model": model, "epochs": min(base.get(size, 60), 30 + 15 * rounds),
-                     "imgsz": 640, "batch": 16 if size in "nsm" else 8, "reason": "fallback schedule"})
+                     "imgsz": imgsz, "batch": 16 if size in "nsm" else 8, "reason": "fallback schedule"})
     return {"runs": runs, "notes": "fallback: agent unavailable or no valid plan"}
 
 
@@ -116,7 +129,7 @@ def plan(request, tries=3):
         except ValueError as e:
             feedback = f"\nYour previous answer was not valid JSON ({e}). Reply with the JSON object only."
             continue
-        errs = validate(p, seats)
+        errs = validate(p, seats, request.get("dataset", {}).get("n_train"))
         if not errs:
             allowed = set(LIMITS) | OPTIONAL | {"seat", "model", "reason"}
             p["runs"] = [{k: v for k, v in r.items() if k in allowed} for r in p["runs"]]
