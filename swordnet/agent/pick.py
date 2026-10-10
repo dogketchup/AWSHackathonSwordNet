@@ -8,8 +8,8 @@ published runs count. If the cluster can't be reached, the runs on this laptop a
     2. compact logs (gpt-oss): each run's log (or its published report.md if this laptop has no log
        for it), progress bars dropped, split into chunks under
        gpt-oss's input limit, summarized; summaries are cached per run in metrics/log_summaries.json
-    3. rank (code): keep runs that meet the target and fit the speed/size budget; the code's pick is
-       the smallest model within `noise` of the most accurate one
+    3. rank (code): keep runs that meet the target, fit the speed/size budget and are not overfit;
+       the code's pick is the smallest model within `noise` of the most accurate one
     4. decide (gpt-oss): gets the numbers, summaries and ranking, returns {"pick", "why"}; a pick
        that is not one of the candidates is replaced by the code's pick
 Changing the budget only re-runs step 3 (`current`); step 2 and 4 run when someone presses Analyze.
@@ -29,6 +29,17 @@ DEFAULTS = {"target": 0.5, "ms": 150.0, "mb": 20.0, "noise": 0.02}  # team sets 
 
 def _num(v):
     return round(float(v), 4) if isinstance(v, (int, float)) else None
+
+
+def overfit(findings, best_epoch):
+    """Why a run's best.pt is overfit, or None. The evaluator flags OVERFITTING when val loss rose
+    while train loss fell; best.pt is overfit when its epoch came after val loss was lowest, i.e. the
+    epochs that raised its score were memorising the training set."""
+    for f in findings or []:
+        m = re.search(r"OVERFITTING.*lowest at epoch (\d+)", str(f))
+        if m and isinstance(best_epoch, int) and best_epoch > int(m.group(1)):
+            return f"overfit: best.pt is from epoch {best_epoch}, val loss was lowest at epoch {m.group(1)}"
+    return None
 
 
 def _local_runs():
@@ -64,6 +75,7 @@ def runs():
         "ms": _num(e.get("ms_per_image")), "mb": _num(e.get("weights_mb")),
         "best_epoch": e.get("best_epoch"), "epochs_run": e.get("epochs_run"),
         "findings": (e.get("findings") or [])[:3], "published_by": e.get("published_by"),
+        "overfit": overfit(e.get("findings"), e.get("best_epoch")),
     } for e in entries]
     return rows, source
 
@@ -83,6 +95,8 @@ def rank(rows, target, ms, mb, noise):
             out.append(f"{r['ms']} ms > {ms}")
         if r["mb"] is None or r["mb"] > mb:
             out.append(f"{r['mb']} MB > {mb}" if r["mb"] is not None else "weights size unknown")
+        if r.get("overfit"):
+            out.append(r["overfit"])
         return out
 
     fits = sorted((r for r in rows if not why_not(r)), key=lambda r: -r["mAP50_95"])
@@ -159,7 +173,7 @@ def analyze(target, ms, mb, noise):
         prompt = (f"Choose which SwordNet model (sword and stick detector for a phone) to ship.\n"
                   f"Runs (numbers are exact):\n{numbers_text(rows)}\n\n"
                   f"Log notes: {json.dumps({k: v for k, v in summaries.items() if k in [r['id'] for r in rows]})}\n\n"
-                  f"Candidates that meet the target and budget: {ranking['candidates']}. "
+                  f"Candidates that meet the target and budget and are not overfit: {ranking['candidates']}. "
                   f"Code ranking says: {ranking['reason']}.\n"
                   'Reply with JSON only: {"pick": "<run id from the candidates>", "why": "<2 sentences>"}')
         try:

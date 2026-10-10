@@ -89,3 +89,18 @@ def test_explore_endpoint_reports_last_round(monkeypatch, tmp_path):
     assert c.get("/api/best/explore").json() == {}
     explore._save({"status": "launched", "scale": "down"})
     assert c.get("/api/best/explore").json()["scale"] == "down"
+
+
+def _row(id, m, best_epoch, findings=()):
+    return {"id": id, "model": "m", "n_train": 10, "mAP50": m, "mAP50_95": m, "ms": 50, "mb": 5,
+            "published_by": "t", "overfit": pick.overfit(list(findings), best_epoch)}
+
+
+def test_best_model_never_picks_an_overfit_run():
+    over = "OVERFITTING: over the last 10 epochs train loss fell while val loss rose; val loss was lowest at epoch 12."
+    rows = [_row("run-1", 0.9, 40, [over]), _row("run-2", 0.7, 30)]
+    r = pick.rank(rows, 0.5, 150, 20, 0.02)
+    assert r["candidates"] == ["run-2"] and r["code_pick"] == "run-2"
+    assert "overfit" in r["table"][0]["why_not"]
+    # val loss turned only after best.pt was saved: best.pt itself is not overfit
+    assert pick.overfit([over], 10) is None
