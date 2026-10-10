@@ -5,3 +5,5 @@ This is the folder that has the outputs that they were looking for.
 - [`submission/CHECKER.md`](submission/CHECKER.md): the checker, the reasoning behind it, and the model's analysis of each run
 - [`submission/attempt_log.csv`](submission/attempt_log.csv): every training attempt on the cluster with its score
 - [`submission/NOTE.md`](submission/NOTE.md): one-page note — what we ran, on what, how many runs, and the spread
+- [`submission/highlight_reel.mp4`](submission/highlight_reel.mp4): highlight reel — only the stretches where the best model holds a confident, tight rotated box on a sword (Kalman-smoothed)
+- [`submission/lightsaber_all_models.jpg`](submission/lightsaber_all_models.jpg): every model tried on a lightsaber frame; none of the trained models finds the glowing blades, a simple glow colour filter does
