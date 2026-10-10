@@ -398,6 +398,20 @@ def best_analyze(target: float = 0.5, ms: float = 150, mb: float = 20, noise: fl
     return pick.analyze(target, ms, mb, noise)
 
 
+@app.post("/api/best/explore")
+def best_explore(target: float = 0.5, ms: float = 150, mb: float = 20, max_epochs: int = 60):
+    """One round of gpt-oss hypotheses on the idle trainer seats (agent/explore.py), in the background."""
+    from swordnet.agent import explore
+    threading.Thread(target=explore.launch, args=(target, ms, mb, max_epochs), daemon=True).start()
+    return {"started": True}
+
+
+@app.get("/api/best/explore")
+def best_explore_state():
+    from swordnet.agent import explore
+    return explore.last() or {}
+
+
 @app.get("/api/best/weights/{key}")
 def best_weights(key: str):
     from swordnet.agent import pick

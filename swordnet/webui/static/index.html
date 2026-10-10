@@ -113,6 +113,13 @@
       <p class="hint">Changing a number re-ranks instantly. Analyze summarizes new run logs and asks gpt-oss-20b to pick.</p>
       <div id="bm-pick" class="msg"></div>
     </div>
+    <div class="card">
+      <h2>Test hypotheses <span class="hint">(starts training on idle team seats)</span></h2>
+      <label>Max epochs <input id="ex-epochs" type="number" step="5" value="60"></label>
+      <button id="ex-run">Run one round</button>
+      <p class="hint">gpt-oss decides whether to scale the network up or down for the target above and proposes one run per idle seat; the checker rejects invalid or repeated runs. One press is one round.</p>
+      <div id="ex-state" class="msg"></div>
+    </div>
     <div class="card"><table id="bm-table"><thead><tr><th>run</th><th>model</th><th>train imgs</th><th>mAP50</th><th>mAP50-95</th><th>ms</th><th>MB</th><th>fits</th></tr></thead><tbody></tbody></table></div>
   </section>
 

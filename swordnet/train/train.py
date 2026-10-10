@@ -52,6 +52,10 @@ def run(dataset, run_dir, cfg):
     if threads:
         torch.set_num_threads(threads)
     workers = min(8, threads or os.cpu_count() or 4)
+    # Ultralytics reshuffles the training images every epoch, but its fixed default seed (0) deals
+    # every run the same sequence of shuffles. A fresh seed per run, saved in config.json, makes each
+    # run's order different and still reproducible.
+    kwargs.setdefault("seed", int.from_bytes(os.urandom(4), "big") % 2**31)
     (run_dir / "config.json").write_text(json.dumps({"model": model_name, **kwargs, "device": str(device)}, indent=2))
 
     model = YOLO(f"{model_name}.pt")

@@ -468,12 +468,27 @@ function showBest(r) {
     || `<tr><td colspan="8" class="hint">No finished runs yet.</td></tr>`;
 }
 async function loadBest() {
+  loadExplore().catch(() => {});
   try { showBest(await api(`/api/best?${bmQuery()}`)); } catch (e) { $("#bm-pick").textContent = e.message; }
 }
 ["target", "ms", "mb", "noise"].forEach((k) => $(`#bm-${k}`).onchange = loadBest);
 $("#bm-analyze").onclick = async () => {
   $("#bm-pick").textContent = "Analyzing (summarizing new run logs, asking gpt-oss)…";
   try { showBest(await api(`/api/best/analyze?${bmQuery()}`, { method: "POST" })); } catch (e) { $("#bm-pick").textContent = e.message; }
+};
+
+// --- test hypotheses (agent/explore.py) ------------------------------------------
+async function loadExplore() {
+  const x = await api("/api/best/explore");
+  $("#ex-state").innerHTML = !x.status ? "No round started yet." : `<b>${esc(x.status)}</b>` +
+    (x.scale ? ` · scale <b>${esc(x.scale)}</b> (${esc(x.by)}): ${esc(x.why)}<ul>` +
+      x.runs.map((r) => `<li>${esc(r.seat)}: ${esc(r.model)} ${r.imgsz}px, ${r.epochs} epochs, batch ${r.batch}: ${esc(r.reason || "")}</li>`).join("") + "</ul>" : "");
+  if (x.status === "planning" || x.status === "launching") setTimeout(loadExplore, 5000);
+}
+$("#ex-run").onclick = async () => {
+  if (!confirm("Start one round of training runs on the idle team seats?")) return;
+  await api(`/api/best/explore?${bmQuery()}&max_epochs=${encodeURIComponent($("#ex-epochs").value)}`, { method: "POST" });
+  setTimeout(loadExplore, 1000);
 };
 
 // Any button whose request fails shows why, instead of looking like the click did nothing.

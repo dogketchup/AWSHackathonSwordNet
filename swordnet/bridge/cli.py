@@ -198,8 +198,9 @@ def cycle(a):
         log("bridge", "every trainer seat is busy; try again later", level="warning")
         return False
     history = [_slim(r) for r in store.list_runs(limit=30)]
-    plan = json.loads(kube.py(SEATS["agent"], "swordnet.agent.plan",
-                              stdin_json={"seats": seats, "dataset": manifest, "history": history}))
+    planner = getattr(a, "planner", None)  # agent/explore.py passes gpt-oss's hypotheses here
+    plan = planner(seats, manifest, history) if planner else json.loads(kube.py(
+        SEATS["agent"], "swordnet.agent.plan", stdin_json={"seats": seats, "dataset": manifest, "history": history}))
     log("agent", f"plan: {plan.get('notes', '')}", plan=plan)
 
     # Every exec call costs ~5 s on this cluster and a start needs several in a row, so seats are
