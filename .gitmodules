@@ -1,0 +1,3 @@
+[submodule "trainium-agent-labs"]
+	path = trainium-agent-labs
+	url = https://github.com/yahavb/trainium-agent-labs.git
