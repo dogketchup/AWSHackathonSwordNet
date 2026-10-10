@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SwordNet</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>SwordNet</h1>
+  <nav>
+    <button data-tab="upload" class="active">Upload</button>
+    <button data-tab="annotate">Annotate</button>
+    <button data-tab="reports">Reports</button>
+  </nav>
+  <span id="stats"></span>
+</header>
+
+<main>
+  <!-- Upload ---------------------------------------------------------------->
+  <section id="tab-upload" class="tab active">
+    <div class="card">
+      <h2>Upload photos or videos</h2>
+      <label>Dataset <input id="up-dataset" value="default"></label>
+      <label>Video: one frame every <input id="up-every" type="number" value="0.5" step="0.1" min="0.1"> s</label>
+      <div id="drop">Drop images / videos here, or <input id="up-files" type="file" multiple accept="image/*,video/*"></div>
+      <p id="up-msg" class="msg"></p>
+    </div>
+    <div class="card">
+      <h2>Scrape a web page</h2>
+      <p class="hint">Downloads every image on each page (or the image itself, for an image URL). Only scrape sites that allow it.</p>
+      <textarea id="sc-urls" rows="3" placeholder="one URL per line"></textarea>
+      <button id="sc-go">Scrape</button>
+      <p id="sc-msg" class="msg"></p>
+    </div>
+    <div class="card">
+      <h2>Datasets</h2>
+      <p class="hint">Auto-label: when on, <code>bridge autolabel</code> proposes boxes (OWLv2 / Grounding DINO) for this dataset's new images. Labelers still review every box.</p>
+      <table id="ds-table"><thead><tr><th>dataset</th><th>to label</th><th>labeled</th><th>auto-label</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- Annotate -------------------------------------------------------------->
+  <section id="tab-annotate" class="tab">
+    <div class="toolbar">
+      <select id="an-filter"><option value="ingest">To label</option><option value="labeled">Labeled</option></select>
+      <button id="an-prev">&larr; Prev</button>
+      <span id="an-pos"></span>
+      <button id="an-next">Next &rarr;</button>
+      <span class="sep"></span>
+      <span id="an-classes"></span>
+      <span class="sep"></span>
+      <button id="an-save">Save <kbd>S</kbd></button>
+      <button id="an-done" class="primary">Save + mark processed <kbd>Enter</kbd></button>
+      <button id="an-reject" class="danger">Reject image</button>
+    </div>
+    <div id="an-stage"><canvas id="an-canvas"></canvas><p id="an-empty" class="hint">Nothing here. Upload images first.</p></div>
+    <p class="hint">Drag to draw a box. Click a box to select it. <kbd>1</kbd>/<kbd>2</kbd> set class,
+      <kbd>Q</kbd>/<kbd>E</kbd> rotate the selected box, <kbd>Del</kbd> deletes it.
+      Dashed = auto-label proposal (unreviewed); a box with a dot was tightened by SAM.</p>
+    <p id="an-info" class="msg"></p>
+  </section>
+
+  <!-- Reports --------------------------------------------------------------->
+  <section id="tab-reports" class="tab">
+    <div class="split">
+      <div class="card">
+        <h2>Training runs</h2>
+        <table id="runs-table"><thead><tr><th>run</th><th>model</th><th>epochs</th><th>train imgs</th><th>mAP50-95</th><th>FPS</th><th>status</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card" id="report"><p class="hint">Pick a run to read its report.</p></div>
+    </div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+"""Report generator: one Markdown report per training run.
+
+Runs on the agent seat, called by the bridge after a run finishes:
+    kubectl exec -i seat-145 -- python -m swordnet.agent.report < run.json > report.md
+
+The numbers and findings sections are generated directly from evaluate.py's output, so they
+are always right. The agent (Qwen on Trainium) writes only the analysis section, and it is
+given the findings rather than asked to discover them; if the server is down, the report is
+still complete, just without that section.
+"""
+import json
+import sys
+
+from swordnet.agent import llm
+
+ANALYSIS_PROMPT = """You are reviewing a YOLO-OBB training run for SwordNet (detects swords and sticks).
+Run {run_no}: model {model}, config {config}.
+Dataset: {dataset}
+Metrics: {metrics}
+Automatic findings: {findings}
+Earlier runs for comparison: {previous}
+
+Write 5-10 short bullet points for the people labeling data and planning runs:
+- Is this run better than earlier ones, and is the difference bigger than val-set noise?
+- Overfitting or underfitting, and what to change next run.
+- What the humans may have missed: label quality, val leakage, class balance, image size vs
+  thin objects like blades, speed vs accuracy for deployment, whether more data or more epochs
+  is the better next investment.
+Be concrete and cite numbers. No preamble."""
+
+
+def _fmt(v):
+    return "-" if v is None else (f"{v:.4f}" if isinstance(v, float) else str(v))
+
+
+def render(run, previous=()):
+    m = run.get("metrics") or {}
+    cfg = run.get("config") or {}
+    ds = m.get("dataset") or {}
+    lines = [
+        f"# Run {run['id']}: {run['model']}",
+        "",
+        f"Status **{run.get('status')}** on `{run.get('seat', '?')}`, "
+        f"{ds.get('n_train', run.get('n_train', '?'))} train / {ds.get('n_val', run.get('n_val', '?'))} val images.",
+        "",
+        "## Config",
+        "",
+        "| key | value |", "|---|---|",
+        *[f"| {k} | {v} |" for k, v in cfg.items()],
+        "",
+        "## Results",
+        "",
+        "| metric | value |", "|---|---|",
+        *[f"| {k} | {_fmt(m.get(k))} |" for k in (
+            "epochs_run", "best_epoch", "best_mAP50", "best_mAP50_95", "final_mAP50", "final_mAP50_95",
+            "final_precision", "final_recall", "train_loss_final", "val_loss_final", "gap_ratio",
+            "ms_per_image", "fps")],
+        "",
+        "## Findings",
+        "",
+        *([f"- {f}" for f in m.get("findings", [])] or ["- none flagged"]),
+        "",
+        "## Dataset",
+        "",
+        f"- objects: `{json.dumps(ds.get('objects', {}))}`",
+        f"- label sources: `{json.dumps(ds.get('label_sources', {}))}`",
+    ]
+    if previous:
+        lines += ["", "## Compared with earlier runs", "",
+                  "| run | model | epochs | train imgs | best mAP50-95 | fps |", "|---|---|---|---|---|---|"]
+        for p in previous:
+            pm = p.get("metrics") or {}
+            lines.append(f"| {p['id']} | {p['model']} | {p['epochs']} | {_fmt(p.get('n_train'))} | "
+                         f"{_fmt(pm.get('best_mAP50_95'))} | {_fmt(pm.get('fps'))} |")
+
+    analysis = None
+    if m and llm.available():
+        try:
+            analysis = llm.chat(ANALYSIS_PROMPT.format(
+                run_no=run["id"], model=run["model"], config=json.dumps(cfg), dataset=json.dumps(ds),
+                metrics=json.dumps({k: v for k, v in m.items() if k not in ("history", "dataset", "findings")}),
+                findings=json.dumps(m.get("findings", [])),
+                previous=json.dumps([{"id": p["id"], "model": p["model"], "n_train": p.get("n_train"),
+                                      "best_mAP50_95": (p.get("metrics") or {}).get("best_mAP50_95")}
+                                     for p in previous])), max_tokens=1200)
+        except Exception as e:
+            analysis = f"_Agent analysis failed: {e}_"
+    lines += ["", "## Agent analysis (Qwen3 on Trainium)", "",
+              analysis or "_Agent unavailable; numbers and findings above are complete._", ""]
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    req = json.load(sys.stdin)
+    print(render(req["run"], req.get("previous", [])))

@@ -1,0 +1,12 @@
+data/
+runs/
+weights/
+*.pt
+__pycache__/
+.venv/
+.pytest_cache/
+
+# secrets: never commit
+.env
+*.env
+!.env.example
