@@ -3,8 +3,24 @@
 ```bash
 .venv/bin/uvicorn swordnet.webui.app:app --host 0.0.0.0 --port 8080
 ```
-Open `http://localhost:8080`; teammates on the same network use `http://<laptop-ip>:8080`.
-The first time, it asks your **name**: the queue and the logs use it.
+Open `http://localhost:8080`. The first time, it asks your **name**: the queue and the logs use it.
+
+## One UI for the whole team
+
+Everyone should use the **same** web UI, the one on the host laptop, so there is one queue, one
+set of labels and one training history. Teammates open `http://<host-laptop-ip>:8080`
+(`hostname -I` shows it):
+
+1. **Set a team password first.** Put `SWORDNET_UI_PASSWORD=<something>` in the host's `.env` and
+   restart the server. Browsers then ask once (any username). Without it, anyone on the network
+   can label, delete images or change settings. Scripts pass it with `curl -u team:<password>`.
+2. **Same network.** Teammates must be on the host's Wi-Fi or hotspot. From elsewhere, put the
+   host and the teammates on a private Tailscale network and use the host's Tailscale address.
+   Don't expose the UI with a public tunnel.
+3. **Firewall.** If the page times out for others: `sudo ufw allow 8080/tcp` on the host.
+
+Pods can't serve the UI: the workshop role has no port-forward. Trained models are also shared
+through the registry on seat-145, which works without the host laptop (`bridge models`).
 
 ## Tabs
 

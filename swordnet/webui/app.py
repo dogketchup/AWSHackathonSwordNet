@@ -8,13 +8,17 @@ http://<laptop-ip>:8080; scraping agents POST images to /api/upload.
 Labelers identify themselves with a name (the X-Labeler header, set by the page). The Annotate
 tab pulls work from the queue (/api/queue/next), so two labelers never get the same image.
 """
+import base64
 import json
+import os
+import secrets
 import shutil
 import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import Request
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -26,6 +30,27 @@ from swordnet.storage import store
 
 app = FastAPI(title="SwordNet")
 STATIC = Path(__file__).parent / "static"
+
+# One shared team password, from .env. When it is set, every page and API call needs it
+# (browsers ask once; scripts use `curl -u team:<password>`). Unset = open, as before.
+UI_PASSWORD = os.environ.get("SWORDNET_UI_PASSWORD", "")
+
+
+@app.middleware("http")
+async def team_password(request: Request, call_next):
+    if UI_PASSWORD:
+        auth = request.headers.get("authorization", "")
+        ok = False
+        if auth.startswith("Basic "):
+            try:
+                _, _, given = base64.b64decode(auth[6:]).decode().partition(":")
+                ok = secrets.compare_digest(given.encode(), UI_PASSWORD.encode())
+            except Exception:
+                ok = False
+        if not ok:
+            return Response("SwordNet: team password required", status_code=401,
+                            headers={"WWW-Authenticate": 'Basic realm="SwordNet"'})
+    return await call_next(request)
 
 
 def _sample_or_404(sample_id):

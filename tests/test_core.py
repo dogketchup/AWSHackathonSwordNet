@@ -251,3 +251,14 @@ def test_upload_skips_duplicates(client, tmp_path):
     assert first["added"] == 1 and first["duplicates"] == []
     assert again["added"] == 0 and again["duplicates"] == ["d.jpg"]
     assert len(list(config.INGEST_DIR.iterdir())) == n_files, "the rejected copy's file was deleted"
+
+
+def test_team_password(monkeypatch):
+    from fastapi.testclient import TestClient
+    from swordnet.webui import app as webapp
+    monkeypatch.setattr(webapp, "UI_PASSWORD", "blade")
+    c = TestClient(webapp.app)
+    assert c.get("/api/queue").status_code == 401
+    assert c.get("/api/queue", auth=("anyone", "wrong")).status_code == 401
+    assert c.get("/api/queue", auth=("anyone", "blade")).status_code == 200
+    assert c.get("/").status_code == 401
