@@ -1,4 +1,4 @@
-"""Auto-labeler: zero-shot detectors propose sword boxes.
+"""Auto-labeler: zero-shot detectors propose sword/stick boxes.
 
 Runs on a seat pod (seat-149 by default) through the bridge:
     images dir in  ->  JSON {filename: [{cls, points, score, source}]} out
@@ -21,7 +21,8 @@ MODELS = {
 }
 # Prompt phrases per class; several phrasings help zero-shot recall.
 PROMPTS = {
-    0: ["a sword", "a longsword", "a steel training sword", "a fencing sword", "a sword blade"],
+    0: ["a sword", "a longsword", "a fencing sword", "a katana"],
+    1: ["a stick", "a wooden staff", "a bamboo sword"],
 }
 
 

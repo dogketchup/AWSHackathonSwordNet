@@ -10,3 +10,11 @@ __pycache__/
 .env
 *.env
 !.env.example
+
+# raw media dropped into the repo for uploading; keep out of git
+images/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm

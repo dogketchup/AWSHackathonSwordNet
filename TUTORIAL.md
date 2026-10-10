@@ -1,6 +1,6 @@
 # SwordNet: how the whole thing fits together
 
-SwordNet detects swords in photos and sparring videos as **oriented boxes** (OBB): a
+SwordNet detects swords and sticks in photos and sparring videos as **oriented boxes** (OBB): a
 rotated rectangle that hugs a diagonal blade instead of a big upright box that is mostly background.
 Humans label, a cluster of Trainium seat pods trains, two LLM agents plan and review, and the best
 weights come back to a laptop for live use.

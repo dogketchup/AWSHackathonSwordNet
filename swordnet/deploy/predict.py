@@ -13,7 +13,7 @@ import time
 import cv2
 import numpy as np
 
-COLORS = {0: (58, 102, 224)}  # BGR: sword orange
+COLORS = {0: (58, 102, 224), 1: (191, 143, 47)}  # BGR: sword orange, stick blue
 
 
 def draw(frame, result, fps=None):
