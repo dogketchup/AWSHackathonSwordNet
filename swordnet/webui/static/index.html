@@ -129,6 +129,16 @@
 
   <!-- Logs ------------------------------------------------------------------>
   <section id="tab-logs" class="tab">
+    <div class="card">
+      <h2>Live queue <span class="hint" id="lv-src">(team database on the cluster)</span> <button id="lv-refresh">Refresh</button></h2>
+      <p id="lv-counts" class="msg">Loading from the cluster…</p>
+      <div class="split">
+        <div><h3>Being annotated now</h3><table id="lv-annotating"><thead><tr><th>image</th><th>by</th><th>since</th><th>lease ends</th></tr></thead><tbody></tbody></table></div>
+        <div><h3>Next in queue</h3><table id="lv-next"><thead><tr><th>#</th><th>image</th><th>waiting since</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <h3>Annotated</h3><table id="lv-done"><thead><tr><th>image</th><th>by</th><th>finished</th></tr></thead><tbody></tbody></table>
+      <h3>Pod logs</h3><pre id="lv-logs"></pre>
+    </div>
     <div class="toolbar">
       <select id="lg-source"><option value="">All sources</option></select>
       <select id="lg-level"><option value="">All levels</option><option>info</option><option>warning</option><option>error</option></select>

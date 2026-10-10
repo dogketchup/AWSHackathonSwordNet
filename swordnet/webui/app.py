@@ -332,4 +332,14 @@ def best_weights(key: str):
     return FileResponse(path, filename=Path(path).name)
 
 
+@app.get("/api/live")
+def live_queue():
+    """Labeling queue and pod logs, read live from the team database on the cluster (read-only)."""
+    from swordnet.bridge import livequeue
+    try:
+        return livequeue.live()
+    except Exception as e:
+        raise HTTPException(502, f"could not read the cluster: {e}")
+
+
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

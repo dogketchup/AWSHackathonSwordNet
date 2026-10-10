@@ -414,6 +414,7 @@ setInterval(() => { if ($("#tab-cluster").classList.contains("active")) loadClus
 // --- logs --------------------------------------------------------------------
 const L = { last: 0, timer: null, key: "" };
 async function loadLogs() {
+  loadLive();
   const params = new URLSearchParams();
   for (const [k, sel] of [["source", "#lg-source"], ["level", "#lg-level"], ["run_id", "#lg-run"], ["q", "#lg-q"]])
     if ($(sel).value) params.set(k, $(sel).value);
@@ -476,3 +477,18 @@ window.addEventListener("unhandledrejection", (e) => {
   t.textContent = msg; t.hidden = false;
   clearTimeout(t._h); t._h = setTimeout(() => (t.hidden = true), 8000);
 });
+
+// --- live queue from the cluster ------------------------------------------------
+async function loadLive() {
+  let r;
+  try { r = await api("/api/live"); } catch (e) { $("#lv-counts").textContent = `Cluster not reachable: ${e.message}`; return; }
+  const row = (cells) => `<tr>${cells.map((c) => `<td>${esc(c ?? "–")}</td>`).join("")}</tr>`;
+  const none = (n, msg) => `<tr><td colspan="${n}" class="hint">${msg}</td></tr>`;
+  $("#lv-src").textContent = `(team database on ${r.seat}, read ${new Date(r.time * 1000).toLocaleTimeString()})`;
+  $("#lv-counts").textContent = `${r.counts.images} images · ${r.counts.done} annotated · ${r.counts.annotating} being annotated · ${r.counts.next} waiting`;
+  $("#lv-annotating tbody").innerHTML = r.annotating.map((x) => row([x.file, x.by, x.since, x.lease_until + (x.expired ? " (expired)" : "")])).join("") || none(4, "Nobody is annotating right now.");
+  $("#lv-next tbody").innerHTML = r.next.map((x, i) => row([i + 1, x.file, x.waiting_since])).join("") || none(3, "Queue is empty.");
+  $("#lv-done tbody").innerHTML = r.done.map((x) => row([x.file, x.by, x.at])).join("") || none(3, "Nothing annotated yet.");
+  $("#lv-logs").textContent = Object.entries(r.logs).map(([k, v]) => `== ${k}.log\n${v.join("\n")}`).join("\n\n");
+}
+$("#lv-refresh").onclick = loadLive;
