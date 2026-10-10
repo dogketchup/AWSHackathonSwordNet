@@ -342,6 +342,11 @@ async function loadImages() {
   if (IM.state) params.set("state", IM.state);
   if (cur) params.set("dataset", cur);
   const imgs = await api(`/api/images?${params}`);
+  // Rebuild the grid only when the images or their states changed: rebuilding every refresh
+  // cancelled thumbnails that were still loading from the cluster, so they stayed black.
+  const sig = JSON.stringify(imgs.map((i) => [i.id, i.state, i.n_labels, i.claimed_by]));
+  if (sig === IM.sig) return;
+  IM.sig = sig;
   const now = Date.now() / 1000;
   const when = (t) => t ? ago(now - t) : "";
   $("#im-grid").innerHTML = imgs.map((i) => {
