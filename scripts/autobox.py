@@ -135,6 +135,9 @@ def main():
     ap.add_argument("--submit-conf", type=float, default=0.35)
     ap.add_argument("--min-conf", type=float, default=0.10)
     ap.add_argument("--dry-run", action="store_true", help="detect and report only; change nothing")
+    ap.add_argument("--speed", action="store_true",
+                    help="save every image with at least one box (no human check); each box's score is kept in "
+                         "the sample's autolabel_raw field so a filter can drop weak labels afterwards")
     a = ap.parse_args()
 
     stats = {"ingest": ingest(Path(a.ingest)) if a.ingest and not a.dry_run else None,
@@ -145,7 +148,7 @@ def main():
         for p in sorted(Path(a.ingest).rglob("*")):
             if p.is_file() and p.suffix.lower() in IMAGE_EXT and (im := cv2.imread(str(p))) is not None:
                 boxes = detect(str(p), im.shape[1], im.shape[0])
-                sure = bool(boxes) and min(b["score"] for b in boxes) >= a.submit_conf and not detect.unsure
+                sure = bool(boxes) and (a.speed or (min(b["score"] for b in boxes) >= a.submit_conf and not detect.unsure))
                 print(json.dumps({"image": p.name, "boxes": [(b["cls"], b["score"]) for b in boxes],
                                   "action": "submit" if sure else ("prefill" if boxes else "leave")}), flush=True)
         print("SUMMARY dry run of the folder only; nothing was uploaded or labeled", flush=True)
@@ -162,7 +165,7 @@ def main():
             stats["errors"] += 1
             print(f"{sid}: detect failed: {e}", file=sys.stderr)
             continue
-        sure = bool(boxes) and min(b["score"] for b in boxes) >= a.submit_conf and not detect.unsure
+        sure = bool(boxes) and (a.speed or (min(b["score"] for b in boxes) >= a.submit_conf and not detect.unsure))
         print(json.dumps({"image": Path(s.filepath).name, "boxes": [(b["cls"], b["score"]) for b in boxes],
                           "action": "submit" if sure else ("prefill" if boxes else "leave")}), flush=True)
         if a.dry_run:
@@ -177,6 +180,10 @@ def main():
         try:
             if sure:
                 db.submit(sid, LABELER, clean)
+                with db._lock:  # keep the scores for the end-of-run filter
+                    s2 = db.get(sid)
+                    s2["autolabel_raw"] = [{**b, "engine": "yoloe", "unsure_count": detect.unsure} for b in boxes]
+                    s2.save()
                 stats["submitted"] += 1
             else:
                 db.release(sid, LABELER)
