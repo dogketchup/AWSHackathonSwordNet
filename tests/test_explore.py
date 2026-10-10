@@ -104,3 +104,13 @@ def test_best_model_never_picks_an_overfit_run():
     assert "overfit" in r["table"][0]["why_not"]
     # val loss turned only after best.pt was saved: best.pt itself is not overfit
     assert pick.overfit([over], 10) is None
+
+
+def test_spot_blur_changes_pixels_not_shape():
+    import numpy as np
+    from swordnet.train import train
+    import albumentations as A
+    spots = train.pixel_augments()[0]
+    img = (np.random.default_rng(0).random((320, 320, 3)) * 255).astype("uint8")
+    out = A.Compose([A.CoarseDropout(**{**spots.get_transform_init_args(), "p": 1.0})])(image=img)["image"]
+    assert out.shape == img.shape and (out != img).any()

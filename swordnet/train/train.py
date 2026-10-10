@@ -30,6 +30,20 @@ AUGMENT = {"degrees": 90.0, "scale": 0.5, "translate": 0.1, "fliplr": 0.5, "flip
            "hsv_h": 0.015, "hsv_s": 0.7, "hsv_v": 0.4, "mosaic": 1.0}
 
 
+def pixel_augments():
+    """Pixel-only albumentations (boxes don't move): 1-4 blurred spots per image, each 3-10% of the
+    side, filled by inpainting so the surroundings smear into it, plus whole-image blur, noise,
+    grayscale, contrast and brightness. Replaces ultralytics' default list. None without albumentations."""
+    try:
+        import albumentations as A
+    except ImportError:
+        return None
+    return [A.CoarseDropout(num_holes_range=(1, 4), hole_height_range=(0.03, 0.1), hole_width_range=(0.03, 0.1),
+                            fill="inpaint_telea", p=0.5),
+            A.Blur(p=0.05), A.MedianBlur(p=0.05), A.GaussNoise(std_range=(0.02, 0.1), p=0.2), A.ToGray(p=0.01), A.CLAHE(p=0.01),
+            A.RandomBrightnessContrast(p=0.2)]
+
+
 def run(dataset, run_dir, cfg):
     import torch
     from ultralytics import YOLO
@@ -67,7 +81,8 @@ def run(dataset, run_dir, cfg):
 
     model = YOLO(f"{model_name}.pt")
     model.train(data=str(data_yaml), project=str(run_dir.parent), name=run_dir.name, exist_ok=True,
-                device=device, workers=workers, plots=True, verbose=True, **kwargs)
+                device=device, workers=workers, plots=True, verbose=True, **kwargs,
+                **({"augmentations": aug} if (aug := pixel_augments()) else {}))
 
     metrics = evaluate.evaluate(run_dir, data_yaml, device=device)
     metrics["config"] = {"model": model_name, **kwargs}
