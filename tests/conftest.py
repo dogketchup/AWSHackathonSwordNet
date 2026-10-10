@@ -6,6 +6,7 @@ import uuid
 TMP = tempfile.mkdtemp(prefix="swordnet-test-")
 os.environ["SWORDNET_HOME"] = TMP
 os.environ["SWORDNET_FO_DATASET"] = f"swordnet_test_{uuid.uuid4().hex[:8]}"
+os.environ["SWORDNET_DB"] = "local"  # tests run the database operations in-process, never on the cluster
 
 import pytest  # noqa: E402
 

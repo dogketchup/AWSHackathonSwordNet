@@ -20,8 +20,10 @@ from swordnet.bridge.seats import SEATS
 
 SEAT = SEATS.get("database", SEATS["agent"])
 TEAM_HOME = "/workspace/swordnet-team"
-POD_ENV = ("FIFTYONE_DATABASE_URI=mongodb://127.0.0.1:27017 SWORDNET_FO_DATASET=swordnet_team "
-           f"SWORDNET_HOME={TEAM_HOME} SWORDNET_SHARED=0 FIFTYONE_DO_NOT_TRACK=true")
+DB_PORT = 27018          # the team's own MongoDB; nothing else on the pod uses this port
+DB_PATH = f"{TEAM_HOME}/db"
+POD_ENV = (f"FIFTYONE_DATABASE_URI=mongodb://127.0.0.1:{DB_PORT} SWORDNET_FO_DATASET=swordnet_team "
+           f"SWORDNET_HOME={TEAM_HOME} SWORDNET_DB=local FIFTYONE_DO_NOT_TRACK=true")
 CACHE = config.HOME / "cache"
 
 
@@ -42,6 +44,30 @@ def call(op, req=None, timeout=180):
     if "error" in res:
         raise ClusterError(res["error"])
     return res
+
+
+def db_running():
+    return kube.running(SEAT, f"mongod --dbpath {DB_PATH}")
+
+
+def start_db():
+    """Start the team MongoDB on the database seat if it isn't running (safe to repeat)."""
+    if db_running():
+        return False
+    # Resolve the binary first: a command substitution inside the detached script kept the exec
+    # session open until it timed out.
+    mongod = kube.sh(SEAT, "python3 -c 'import fiftyone.db, os; "
+                           "print(os.path.join(os.path.dirname(fiftyone.db.__file__), \"bin\", \"mongod\"))'").strip()
+    kube.sh(SEAT, f"mkdir -p {DB_PATH} {TEAM_HOME}/logs")
+    kube.spawn(SEAT, f"{mongod} --dbpath {DB_PATH} --bind_ip 127.0.0.1 --port {DB_PORT}",
+               log=f"{TEAM_HOME}/logs/mongod.log")
+    for _ in range(20):
+        time.sleep(2)
+        if kube.sh(SEAT, f"python3 -c \"import pymongo; pymongo.MongoClient('mongodb://127.0.0.1:{DB_PORT}', "
+                         f"serverSelectionTimeoutMS=1500).admin.command('ping'); print('up')\" 2>/dev/null || true",
+                   check=False).strip() == "up":
+            return True
+    raise ClusterError(f"team MongoDB did not start on {SEAT}; see {TEAM_HOME}/logs/mongod.log")
 
 
 def cache_file(sample_id, b64=None, ext=None):

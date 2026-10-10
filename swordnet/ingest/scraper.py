@@ -16,7 +16,6 @@ import httpx
 from PIL import Image
 
 from swordnet import config
-from swordnet.storage import store
 
 MIN_SIDE = 160  # smaller than this is an icon or thumbnail
 HEADERS = {"User-Agent": "SwordNet-scraper/0.1 (research dataset)"}
@@ -46,14 +45,18 @@ def _image_urls(client, url):
 
 
 def _known_hashes():
+    from swordnet.storage import store
     return {Path(f).name.split("_", 1)[0] for f in store.dataset().values("filepath") if Path(f).name.startswith("scr")}
 
 
-def scrape(urls, dataset, limit=200):
+def scrape(urls, dataset, limit=200, out_dir=None, register=True):
+    """Download images. register=False: only write files to out_dir and return [(path, origin)];
+    the team database then drops any it already has (same bytes)."""
     config.ensure_dirs()
+    out_dir = Path(out_dir or config.INGEST_DIR)
     added = []
     with httpx.Client(headers=HEADERS, timeout=20, follow_redirects=True) as client:
-        seen = _known_hashes()
+        seen = _known_hashes() if register else set()
         for page in urls:
             try:
                 img_urls, cache = _image_urls(client, page)
@@ -74,8 +77,12 @@ def scrape(urls, dataset, limit=200):
                 if h in seen:
                     continue
                 seen.add(h)
-                path = config.INGEST_DIR / f"{h}_.jpg"
+                path = out_dir / f"{h}_.jpg"
                 im.save(path, quality=92)
+                if not register:
+                    added.append((path, f"scrape:{u}"))
+                    continue
+                from swordnet.storage import store
                 sid = store.add_image(path, dataset, f"scrape:{u}")
                 if sid:
                     added.append(sid)
