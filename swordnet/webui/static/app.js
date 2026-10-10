@@ -450,7 +450,7 @@ const bmQuery = () => ["target", "ms", "mb", "noise"].map((k) => `${k}=${encodeU
 function showBest(r) {
   const d = r.decision;
   const pick = d && !d.stale ? d.pick : r.code_pick;
-  $("#bm-pick").innerHTML = pick == null ? `No run meets the target and fits the budget.`
+  $("#bm-pick").innerHTML = !r.table.length ? `No finished runs yet.` : pick == null ? `No run meets the target and fits the budget.`
     : `<b>Pick: run ${pick}</b> (${d && !d.stale ? esc(d.by) : "code"}): ${esc(d && !d.stale ? d.why : r.reason)}
        <a href="/api/best/weights/${pick}">Download best.pt</a>` +
       (d && d.stale ? `<br><span class="hint">The last gpt-oss pick (run ${d.pick}) doesn't fit this budget; press Analyze to ask again.</span>` : "");
