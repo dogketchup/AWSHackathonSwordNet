@@ -11,12 +11,22 @@ import os
 import shlex
 import subprocess
 import tarfile
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 CONTAINER = "app"
+# The API server resets connections when too many exec streams are open at once (seen with 5 runs
+# x 6 pieces = 30). Every kubectl call in this process goes through this cap.
+MAX_EXECS = 8
+_exec_slots = threading.BoundedSemaphore(MAX_EXECS)
+
+
+def _run(cmd, **kw):
+    with _exec_slots:
+        return subprocess.run(cmd, **kw)
 APP_DIR = "/workspace/swordnet-app"          # code (the swordnet/ package)
 DATA_DIR = "/workspace/swordnet-data"        # datasets, runs, autolabel scratch
 VENV = "/workspace/swordnet-venv"            # ultralytics + CPU torch, kept apart from vLLM's torch
@@ -32,8 +42,8 @@ def sh(seat, script, check=True, input=None, timeout=None):
     """Run a bash script in the seat pod; return stdout as text."""
     cmd = _kubectl("exec", "-i" if input is not None else "", seat, "-c", CONTAINER, "--", "bash", "-c", script)
     cmd = [c for c in cmd if c]
-    p = subprocess.run(cmd, input=input, capture_output=True, timeout=timeout,
-                       text=isinstance(input, str) or input is None)
+    p = _run(cmd, input=input, capture_output=True, timeout=timeout,
+             text=isinstance(input, str) or input is None)
     if check and p.returncode != 0:
         err = p.stderr if isinstance(p.stderr, str) else p.stderr.decode(errors="replace")
         raise RuntimeError(f"{seat}: command failed ({p.returncode}):\n{script}\n{err[-2000:]}")
@@ -63,7 +73,7 @@ def _exec_bytes(seat, script, input=None, timeout=120):
     """One exec call returning raw stdout bytes; raises on a non-zero exit or timeout."""
     cmd = _kubectl("exec", *(["-i"] if input is not None else []), seat, "-c", CONTAINER, "--", "bash", "-c", script)
     try:
-        p = subprocess.run(cmd, input=input, capture_output=True, timeout=timeout)
+        p = _run(cmd, input=input, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise RuntimeError("timed out")
     if p.returncode != 0:

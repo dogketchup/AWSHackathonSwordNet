@@ -10,6 +10,12 @@
     python -m swordnet.bridge.cli promote        # Qwen picks the run to deploy; smoke-tests it
     python -m swordnet.bridge.cli pull-weights   # promoted (or best) weights -> ./weights/
 
+  Shared with every teammate through the registry on the cluster (swordnet/bridge/registry.py):
+    python -m swordnet.bridge.cli publish        # runs + labeled dataset + media -> registry
+    python -m swordnet.bridge.cli models         # every published model, best first
+    python -m swordnet.bridge.cli download       # best (or --run N) weights from the registry
+    python -m swordnet.bridge.cli pull-dataset   # import the published dataset into your FiftyOne
+
 Everything it does is logged (swordnet.logs), including the pods' own job logs, which it tails
 while it waits. The web UI's Logs tab shows them.
 """
@@ -293,6 +299,13 @@ def finish_run(run_id, seat, st):
     log("bridge", f"run {run_id} {st} on {seat}" + (f": best mAP50-95 {metrics.get('best_mAP50_95')}" if metrics else ""),
         level="info" if st == "done" else "error", run_id=run_id, seat=seat)
     write_report(run_id)
+    if st == "done" and best.exists():
+        try:
+            from swordnet.bridge import registry
+            registry.publish_run(store.get_run(run_id))
+        except Exception as e:  # sharing must never lose a collected run
+            log("bridge", f"run {run_id}: publish to registry failed, retry with `bridge publish` ({e})",
+                level="warning", run_id=run_id)
 
 
 def write_report(run_id):
@@ -381,6 +394,46 @@ def pull_weights(a):
     print(dst)
 
 
+def publish(a):
+    from swordnet.bridge import registry
+    index = registry.read_index()
+    for r in store.list_runs(limit=1000):
+        if r["status"] == "done" and r.get("weights") and (a.all or f"run-{r['id']}" not in index):
+            registry.publish_run(r)
+    if not a.runs_only:
+        registry.publish_dataset()
+    models(a)
+
+
+def models(a):
+    from swordnet.bridge import registry
+    runs, ds = registry.models()
+    if not runs:
+        print("registry is empty")
+    else:
+        print(f"{'model':<10} {'run':<8} {'imgsz':>5} {'train':>5} {'mAP50':>6} {'mAP50-95':>8} {'FPS':>5} {'MB':>5}  by")
+        for r in runs:
+            f = lambda k, d=3: "-" if r.get(k) is None else f"{r[k]:.{d}f}"
+            print(f"{r['model'].removesuffix('-obb'):<10} {r['key']:<8} {(r.get('config') or {}).get('imgsz', '-'):>5} "
+                  f"{r.get('n_train') or '-':>5} {f('best_mAP50'):>6} {f('best_mAP50_95'):>8} {f('fps', 1):>5} "
+                  f"{r.get('weights_mb', '-'):>5}  {r.get('published_by', '?')}")
+    if ds:
+        print(f"dataset: {ds['images']} labeled images, {ds['media_files']} media files, "
+              f"published by {ds['published_by']} {time.strftime('%Y-%m-%d %H:%M', time.localtime(ds['published_at']))}")
+
+
+def download(a):
+    from swordnet.bridge import registry
+    run, dst = registry.download(f"run-{a.run}" if a.run else None, a.out)
+    print(f"{run['key']} ({run['model']}, mAP50-95 {run.get('best_mAP50_95')}, {run.get('fps')} FPS) -> {dst}")
+
+
+def pull_dataset(a):
+    from swordnet.bridge import registry
+    ds = registry.pull_dataset(a.name)
+    print(f"imported {len(ds)} images as FiftyOne dataset '{ds.name}'")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -408,6 +461,15 @@ def main():
     s.add_argument("run", type=int)
     s = sub.add_parser("promote"); s.set_defaults(fn=promote)
     s.add_argument("--target", default="a laptop CPU")
+    s = sub.add_parser("publish"); s.set_defaults(fn=publish)
+    s.add_argument("--all", action="store_true", help="republish runs already in the registry")
+    s.add_argument("--runs-only", action="store_true", help="skip the dataset and media")
+    sub.add_parser("models").set_defaults(fn=models)
+    s = sub.add_parser("download"); s.set_defaults(fn=download)
+    s.add_argument("--run", type=int, help="run number (default: best mAP50-95 in the registry)")
+    s.add_argument("--out", default="weights")
+    s = sub.add_parser("pull-dataset"); s.set_defaults(fn=pull_dataset)
+    s.add_argument("--name", default="swordnet_shared", help="FiftyOne dataset name to import into")
     s = sub.add_parser("pull-weights"); s.set_defaults(fn=pull_weights)
     s.add_argument("--run", type=int)
     s.add_argument("--out", default="weights")

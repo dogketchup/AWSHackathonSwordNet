@@ -55,8 +55,12 @@ Every component has its own `TUTORIAL.md` next to its code; this one is the map.
    overfitting / underfitting / wasted-epoch checks, dataset warnings and FPS → `data/metrics/`.
 7. **Report** ([swordnet/agent](swordnet/agent/TUTORIAL.md)): one Markdown report per run: numbers
    and findings computed directly, analysis written by gpt-oss-20b (or Qwen if gpt-oss isn't configured).
-8. **Deploy** ([swordnet/deploy](swordnet/deploy/TUTORIAL.md)): `bridge promote` has Qwen pick the run
-   to deploy, then smoke-tests it; `scripts/get_weights.sh` / `.ps1` pull weights and open a webcam.
+8. **Share** ([swordnet/bridge](swordnet/bridge/TUTORIAL.md#team-registry-registrypy)): every collected
+   run is published to the team registry on seat-145; teammates list models with `bridge models`
+   and fetch them with `bridge download`, without needing this laptop.
+9. **Deploy** ([swordnet/deploy](swordnet/deploy/TUTORIAL.md)): `bridge promote` has Qwen pick the run
+   to deploy, then smoke-tests it; `scripts/get_weights.sh` / `.ps1` download from the registry and
+   open a webcam.
 
 Every step writes to one central log (FiftyOne's MongoDB), including the pods' own training output,
 which the bridge tails while it waits. The web UI's **Logs** tab filters it by source, run and level.

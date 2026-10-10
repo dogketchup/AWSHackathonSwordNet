@@ -22,11 +22,24 @@ Process checks use `kube.running()`, which brackets the first character of the p
 looks alive forever.
 
 Seat roles are in [`seats.py`](seats.py) (override with `SWORDNET_SEATS` JSON).
+
+## Team registry ([`registry.py`](registry.py))
+
+Teammates can't reach each other's laptops, but all of them can exec into the team seats, so
+shared results live on seat-145 under `/workspace/swordnet-registry/`: every collected run's
+`best.pt`, metrics, report and curves, an `index.json` listing them, a FiftyOne export of the
+labeled data, and the raw videos. Runs are published automatically when collected; `publish`
+(re)sends runs plus the dataset. Readers use `models`, `download` and `pull-dataset`; none of
+those need the publisher's FiftyOne database.
+
+Note that the registry is a shared copy, not a live database: labels made on another laptop
+don't flow back. One laptop should be the labeling and training host.
 Credentials come from `.env`, never from the repo.
 
 ```bash
 B=".venv/bin/python -m swordnet.bridge.cli"
 $B setup | status | push-code | autolabel | refine | cycle | loop | collect | report N | promote | pull-weights
+$B publish | models | download [--run N] | pull-dataset        # the team registry, below
 ```
 After changing code under `swordnet/`, run `push-code` so the pods get it.
 

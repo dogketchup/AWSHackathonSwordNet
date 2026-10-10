@@ -12,6 +12,17 @@ on the pod (`swordnet/metrics/smoketest.py`) before it is marked deployed.
 
 ## 2. Get the weights and run them
 
+Every collected run is published to the **team registry** on seat-145
+(`/workspace/swordnet-registry/`), so any teammate's client can list and download models. No one
+needs your laptop or your FiftyOne database:
+```bash
+.venv/bin/python -m swordnet.bridge.cli models               # every published model, best first
+.venv/bin/python -m swordnet.bridge.cli download             # best mAP50-95 -> weights/swordnet-best.pt
+.venv/bin/python -m swordnet.bridge.cli download --run 4     # a specific run
+.venv/bin/python -m swordnet.bridge.cli pull-dataset         # labeled data -> FiftyOne 'swordnet_shared'
+```
+The scripts below wrap the same commands:
+
 macOS / Linux:
 ```bash
 ./scripts/get_weights.sh                 # best run on any trainer seat -> weights/swordnet-best.pt
@@ -24,9 +35,9 @@ Windows (PowerShell):
 .\scripts\get_weights.ps1
 .\scripts\get_weights.ps1 -Serve -Source fight.mp4
 ```
-The scripts talk to the pods directly with kubectl, so any teammate with cluster access can use
-them. They do not need the FiftyOne database. They pick the highest mAP50-95 run; for the run
-Qwen promoted, use `bridge pull-weights` on the laptop that runs the bridge.
+They need this repo, its `.venv` (or `requirements.txt`) and kubectl access, nothing else. They
+pick the highest mAP50-95 published run; for the run Qwen promoted, use `bridge pull-weights` on
+the laptop that runs the bridge.
 
 ## 3. Run it any time
 
