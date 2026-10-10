@@ -129,6 +129,16 @@ def main():
     stats = {"ingest": ingest(Path(a.ingest)) if a.ingest and not a.dry_run else None,
              "submitted": 0, "prefilled": 0, "no_boxes": 0, "skipped_busy": 0, "errors": 0, "boxes": 0}
     detect = detector(a.min_conf)
+    if a.dry_run and a.ingest:  # preview the folder's photos without uploading anything
+        import cv2
+        for p in sorted(Path(a.ingest).rglob("*")):
+            if p.is_file() and p.suffix.lower() in IMAGE_EXT and (im := cv2.imread(str(p))) is not None:
+                boxes = detect(str(p), im.shape[1], im.shape[0])
+                sure = bool(boxes) and min(b["score"] for b in boxes) >= a.submit_conf
+                print(json.dumps({"image": p.name, "boxes": [(b["cls"], b["score"]) for b in boxes],
+                                  "action": "submit" if sure else ("prefill" if boxes else "leave")}), flush=True)
+        print("SUMMARY dry run of the folder only; nothing was uploaded or labeled", flush=True)
+        return
     q = db.mongo()[db.QUEUE]
     free = {"$or": [{"state": "pending"}, {"state": "claimed", "lease_until": {"$lt": db.now()}}]}  # as db.claim
     pending = [d["_id"] for d in q.find(free).sort([("priority", -1), ("created_at", 1)]).limit(a.limit)]
