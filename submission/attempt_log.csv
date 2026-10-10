@@ -1,0 +1,13 @@
+attempt,source,model,seat,img_size,train_images,val_images,epochs_run,best_epoch,mAP50,mAP50_95,labels
+run-1,cluster registry (index.json),yolo11s-obb,seat-146,640,13,2,30,28,0.19,0.0844,human
+run-2,cluster registry (index.json),yolo11m-obb,seat-147,640,13,2,30,28,0.9125,0.2965,human
+run-3,cluster registry (index.json),yolo11l-obb,seat-148,640,13,2,30,22,0.5083,0.0851,human
+run-4,cluster registry (index.json),yolo11s-obb,seat-145,800,13,2,30,28,0.1663,0.1039,human
+run-5,cluster registry (index.json),yolo11s-obb,seat-149,512,13,2,30,25,0.335,0.1005,human
+seat-146/obb-640,cluster training log (seat-146:/workspace/swordnet-train/ds-182321/obb-640/results.csv),yolo11s-obb,seat-146,640,290,72,10,8,0.4028,0.1935,run-2 detections oriented by SAM
+seat-147/cont-512,cluster training log (seat-147:/workspace/swordnet-train/ds-182321/cont-512/results.csv),yolo11s-obb,seat-147,512,290,72,11,1,0.3562,0.1659,run-2 detections oriented by SAM (continued from best)
+seat-147/obb-512,cluster training log (seat-147:/workspace/swordnet-train/ds-182321/obb-512/results.csv),yolo11s-obb,seat-147,512,290,72,15,15,0.3608,0.1727,run-2 detections oriented by SAM
+seat-148/cont-416,cluster training log (seat-148:/workspace/swordnet-train/ds-182321/cont-416/results.csv),yolo11s-obb,seat-148,416,290,72,17,7,0.347,0.1834,run-2 detections oriented by SAM (continued from best)
+seat-148/obb-416,cluster training log (seat-148:/workspace/swordnet-train/ds-182321/obb-416/results.csv),yolo11s-obb,seat-148,416,290,72,22,22,0.398,0.1972,run-2 detections oriented by SAM
+seat-149/cont-800,cluster training log (seat-149:/workspace/swordnet-train/ds-182321/cont-800/results.csv),yolo11s-obb,seat-149,800,290,72,5,5,0.2747,0.1221,run-2 detections oriented by SAM (continued from best)
+seat-149/obb-800,cluster training log (seat-149:/workspace/swordnet-train/ds-182321/obb-800/results.csv),yolo11s-obb,seat-149,800,290,72,6,5,0.3739,0.1882,run-2 detections oriented by SAM
