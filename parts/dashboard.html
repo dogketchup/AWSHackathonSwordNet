@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SwordNet runs</title>
+<!-- Standalone dashboard (scheduler plan, Part 3). Reads seats.json, runs.jsonl and summary.json
+     from the same folder (the metrics folder written by run_log.py). Serve that folder, e.g.
+       cd data/metrics && python3 -m http.server 8090
+     and open http://localhost:8090/dashboard.html. Read-only: no buttons that change anything. -->
+<style>
+  :root { --bg:#fbfaf7; --card:#fff; --text:#1f1e1c; --muted:#6b6a65; --line:#e3e1da;
+          --nano:#1d9e75; --medium:#534ab7; --large:#d85a30; --good:#3b6d11; --bad:#a32d2d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1c1b19; --card:#262522; --text:#ecebe6; --muted:#a3a19a; --line:#3a3935;
+            --nano:#5dcaa5; --medium:#afa9ec; --large:#f0997b; --good:#97c459; --bad:#f09595; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
+  header { padding:16px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; }
+  h1 { font-size:20px; font-weight:600; margin:0; }
+  #updated { color:var(--muted); font-size:13px; }
+  main { display:grid; gap:16px; padding:0 16px 24px; grid-template-columns:repeat(auto-fit, minmax(min(100%, 460px), 1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; min-width:0; }
+  .wide { grid-column:1 / -1; }
+  h2 { font-size:15px; font-weight:600; margin:0 0 10px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; cursor:pointer; }
+  .scroll { overflow-x:auto; }
+  .muted { color:var(--muted); }
+  .ok { color:var(--good); } .bad { color:var(--bad); }
+  .legend { display:flex; gap:14px; font-size:12px; color:var(--muted); margin-top:6px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:-1px; }
+  svg { width:100%; height:auto; display:block; }
+  svg text { fill:var(--muted); font-size:11px; }
+  .big { font-size:22px; font-weight:600; }
+</style>
+</head>
+<body>
+<header><h1>SwordNet runs</h1><span id="updated">loading…</span></header>
+<main>
+  <section class="card"><h2>Recommendation</h2><div id="rec" class="muted">No analysis yet.</div></section>
+  <section class="card"><h2>Seats</h2><div class="scroll"><table id="seats"><thead><tr><th>seat</th><th>state</th><th>job</th><th>running for</th></tr></thead><tbody></tbody></table></div></section>
+  <section class="card"><h2>Held-out accuracy vs annotated images</h2><div id="curves"></div>
+    <div class="legend"><span><span class="dot" style="background:var(--nano)"></span>nano</span><span><span class="dot" style="background:var(--medium)"></span>medium</span><span><span class="dot" style="background:var(--large)"></span>large</span><span>dashed: target</span></div></section>
+  <section class="card"><h2>Accuracy vs speed (dot size = phone MB)</h2><div id="trade"></div>
+    <div class="legend"><span>dashed: speed budget</span><span>ringed: recommended</span></div></section>
+  <section class="card wide"><h2>Runs</h2><div class="scroll"><table id="runs"><thead><tr>
+    <th data-k="run_id">run</th><th data-k="kind">kind</th><th data-k="size">size</th><th data-k="level_id">level</th>
+    <th data-k="n_train_images">images</th><th data-k="seed">seed</th><th data-k="status">status</th>
+    <th data-k="mAP50">mAP50</th><th data-k="mAP50_95">mAP50-95</th><th data-k="cpu_ms">CPU ms</th>
+    <th data-k="phone_mb">phone MB</th><th data-k="seconds">minutes</th><th>note</th></tr></thead><tbody></tbody></table></div></section>
+</main>
+<script>
+const COLORS = { nano: "var(--nano)", medium: "var(--medium)", large: "var(--large)" };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (v, d = 3) => v == null ? "–" : (typeof v === "number" ? +v.toFixed(d) : esc(v));
+let RUNS = [], SORT = { k: "run_id", dir: -1 };
+
+async function getJSON(name) { try { const r = await fetch(name, { cache: "no-store" }); return r.ok ? r.json() : null; } catch { return null; } }
+async function getRuns() {
+  try {
+    const r = await fetch("runs.jsonl", { cache: "no-store" });
+    if (!r.ok) return [];
+    return (await r.text()).split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  } catch { return []; }
+}
+
+function plot(points, opts) {
+  // points: [{x, y, size, color, ring, label}]; opts: {xLabel, yLabel, hline, vline, lines}
+  const W = 460, H = 260, L = 44, R = 12, T = 10, B = 34;
+  const xs = points.map((p) => p.x).concat(opts.vline ?? []), ys = points.map((p) => p.y).concat(opts.hline ?? []);
+  if (!points.length) return `<p class="muted">Nothing to plot yet.</p>`;
+  const x0 = Math.min(0, ...xs), x1 = Math.max(...xs) * 1.08 || 1, y0 = 0, y1 = Math.min(1, Math.max(...ys) * 1.15) || 1;
+  const sx = (x) => L + (x - x0) / (x1 - x0) * (W - L - R), sy = (y) => H - B - (y - y0) / (y1 - y0) * (H - T - B);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  for (let i = 0; i <= 4; i++) { const y = y0 + (y1 - y0) * i / 4; s += `<line x1="${L}" x2="${W - R}" y1="${sy(y)}" y2="${sy(y)}" stroke="var(--line)"/><text x="${L - 6}" y="${sy(y) + 4}" text-anchor="end">${y.toFixed(2)}</text>`; }
+  for (let i = 0; i <= 4; i++) { const x = x0 + (x1 - x0) * i / 4; s += `<text x="${sx(x)}" y="${H - B + 16}" text-anchor="middle">${Math.round(x)}</text>`; }
+  s += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">${opts.xLabel}</text>`;
+  if (opts.hline != null) s += `<line x1="${L}" x2="${W - R}" y1="${sy(opts.hline)}" y2="${sy(opts.hline)}" stroke="var(--muted)" stroke-dasharray="4 4"/>`;
+  if (opts.vline != null) s += `<line x1="${sx(opts.vline)}" x2="${sx(opts.vline)}" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="4 4"/>`;
+  for (const ln of opts.lines ?? []) s += `<polyline fill="none" stroke="${ln.color}" stroke-width="2" points="${ln.pts.map((p) => `${sx(p.x)},${sy(p.y)}`).join(" ")}"/>`;
+  for (const p of points) {
+    s += `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="${p.size ?? 4}" fill="${p.color}" opacity="0.85"><title>${esc(p.label)}</title></circle>`;
+    if (p.ring) s += `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="${(p.size ?? 4) + 5}" fill="none" stroke="var(--text)" stroke-width="1.5"/>`;
+  }
+  return s + `</svg>`;
+}
+
+function renderRec(sm) {
+  if (!sm) return;
+  const r = sm.recommendation, nz = sm.noise || {};
+  const need = Object.entries(sm.images_needed || {}).map(([k, v]) => `${k}: ${v ?? "not reached"}`).join(" · ");
+  $("#rec").innerHTML = (r ? `<div class="big ok">${esc(r.size)} <span class="muted" style="font-size:14px">${esc(r.model)}</span></div>
+      <p>mAP50 ${fmt(r.mAP50)}, mAP50-95 ${fmt(r.mAP50_95)}, ${fmt(r.cpu_ms, 1)} ms on pod CPU, ${fmt(r.size_mb, 1)} MB (${esc(r.size_source)})</p>`
+      : `<div class="big bad">None yet</div>`) +
+    `<p>${esc(sm.reason)}</p><p class="muted">Target mAP50 ${sm.target_mAP50} · budget ${sm.budget_ms} ms, ${sm.budget_mb} MB ·
+     noise ±${nz.mAP50_95}${nz.measured ? "" : " (assumed)"}<br>Images needed: ${esc(need || "–")}<br>
+     Runs: ${sm.runs?.done ?? 0} done, ${sm.runs?.failed ?? 0} failed or stopped</p>`;
+  const pts = [], lines = [];
+  for (const [size, cur] of Object.entries(sm.curves || {})) {
+    const p = cur.map((c) => ({ x: c.n_images, y: c.mAP50, color: COLORS[size] ?? "var(--muted)", label: `${size}: ${c.n_images} images, mAP50 ${c.mAP50}` }));
+    pts.push(...p); lines.push({ color: COLORS[size] ?? "var(--muted)", pts: p });
+  }
+  $("#curves").innerHTML = plot(pts, { xLabel: "annotated training images", hline: sm.target_mAP50, lines });
+  const tp = (sm.candidates || []).filter((c) => c.cpu_ms != null).map((c) => ({
+    x: c.cpu_ms, y: c.mAP50_95, size: 4 + Math.sqrt(c.size_mb || 1) * 2, color: COLORS[c.size] ?? "var(--muted)",
+    ring: r && r.size === c.size, label: `${c.size}: ${c.cpu_ms} ms, ${c.size_mb} MB, mAP50-95 ${c.mAP50_95}` }));
+  $("#trade").innerHTML = plot(tp, { xLabel: "CPU ms per image", vline: sm.budget_ms });
+}
+
+function renderSeats(st) {
+  const now = Date.now() / 1000;
+  $("#seats tbody").innerHTML = (st?.seats || []).map((s) => `<tr><td>${esc(s.seat)}</td>
+    <td class="${s.state === "running" ? "ok" : "muted"}">${esc(s.state)}</td>
+    <td>${s.run_id ? `${esc(s.kind)} ${esc(s.size)} L${esc(s.level_id)}` : "–"}</td>
+    <td>${s.since ? Math.round((now - s.since) / 60) + " min" : "–"}</td></tr>`).join("") ||
+    `<tr><td colspan="4" class="muted">No seat status yet.</td></tr>`;
+}
+
+function renderRuns() {
+  const rows = [...RUNS].sort((a, b) => { const x = a[SORT.k], y = b[SORT.k];
+    return (x == null) - (y == null) || (x > y ? 1 : x < y ? -1 : 0) * SORT.dir; });
+  $("#runs tbody").innerHTML = rows.map((r) => `<tr><td>${esc(r.run_id)}</td><td>${esc(r.kind)}</td><td>${esc(r.size)}</td>
+    <td>${fmt(r.level_id, 0)}</td><td>${fmt(r.n_train_images, 0)}</td><td>${fmt(r.seed, 0)}</td>
+    <td class="${r.status === "done" ? "ok" : "bad"}">${esc(r.status)}</td><td>${fmt(r.mAP50)}</td><td>${fmt(r.mAP50_95)}</td>
+    <td>${fmt(r.cpu_ms, 1)}</td><td>${fmt(r.phone_mb, 1)}</td><td>${r.seconds ? Math.round(r.seconds / 60) : "–"}</td>
+    <td class="muted">${esc(r.note || r.heldout_error || r.phone_error || "")}</td></tr>`).join("") ||
+    `<tr><td colspan="13" class="muted">No runs yet.</td></tr>`;
+}
+document.querySelectorAll("#runs th[data-k]").forEach((th) => th.onclick = () => {
+  SORT = { k: th.dataset.k, dir: SORT.k === th.dataset.k ? -SORT.dir : -1 }; renderRuns(); });
+function $(s) { return document.querySelector(s); }
+
+async function refresh() {
+  const [sm, st, runs] = await Promise.all([getJSON("summary.json"), getJSON("seats.json"), getRuns()]);
+  RUNS = runs; renderRec(sm); renderSeats(st); renderRuns();
+  $("#updated").textContent = `updated ${new Date().toLocaleTimeString()} · refreshes every 30 s`;
+}
+refresh(); setInterval(refresh, 30000);
+</script>
+</body>
+</html>
