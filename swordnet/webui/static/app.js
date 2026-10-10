@@ -486,9 +486,9 @@ async function loadLive() {
   const none = (n, msg) => `<tr><td colspan="${n}" class="hint">${msg}</td></tr>`;
   $("#lv-src").textContent = `(team database on ${r.seat}, read ${new Date(r.time * 1000).toLocaleTimeString()})`;
   $("#lv-counts").textContent = `${r.counts.images} images · ${r.counts.done} annotated · ${r.counts.annotating} being annotated · ${r.counts.next} waiting`;
-  $("#lv-annotating tbody").innerHTML = r.annotating.map((x) => row([x.file, x.by, x.since, x.lease_until + (x.expired ? " (expired)" : "")])).join("") || none(4, "Nobody is annotating right now.");
+  $("#lv-annotating tbody").innerHTML = r.annotating.map((x) => row([x.file, x.by, x.until])).join("") || none(3, "Nobody is annotating right now.");
   $("#lv-next tbody").innerHTML = r.next.map((x, i) => row([i + 1, x.file, x.waiting_since])).join("") || none(3, "Queue is empty.");
-  $("#lv-done tbody").innerHTML = r.done.map((x) => row([x.file, x.by, x.at])).join("") || none(3, "Nothing annotated yet.");
+  $("#lv-done tbody").innerHTML = r.done.map((x) => row([x.file, x.by, x.at, x.boxes])).join("") || none(4, "Nothing annotated yet.");
   $("#lv-logs").textContent = Object.entries(r.logs).map(([k, v]) => `== ${k}.log\n${v.join("\n")}`).join("\n\n");
 }
 $("#lv-refresh").onclick = loadLive;
