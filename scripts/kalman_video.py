@@ -24,6 +24,7 @@ class Kalman:
         k.transitionMatrix = np.eye(8, dtype=np.float32)
         for i in range(4):
             k.transitionMatrix[i, i + 4] = 1.0
+            k.transitionMatrix[i + 4, i + 4] = 0.8  # speed fades while coasting, so boxes don't fly off
         k.measurementMatrix = np.eye(4, 8, dtype=np.float32)
         k.processNoiseCov = np.diag([1, 1, 1, 1, 10, 10, 5, 5]).astype(np.float32) * 1e-1
         k.measurementNoiseCov = np.eye(4, dtype=np.float32) * 4.0
@@ -70,7 +71,7 @@ def main():
     ap.add_argument("--weights", required=True)
     ap.add_argument("--prompts", help="YOLOE only: phrases separated by |")
     ap.add_argument("--out")
-    ap.add_argument("--coast", type=int, default=15, help="frames to keep predicting a missed sword")
+    ap.add_argument("--coast", type=int, default=6, help="frames to keep predicting a missed sword (6 = 0.2 s at 30 fps)")
     ap.add_argument("--conf", type=float, default=0.25)
     a = ap.parse_args()
 
