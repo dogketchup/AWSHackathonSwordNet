@@ -83,7 +83,10 @@ async function loadDatasets() {
 const canvas = $("#an-canvas"), ctx = canvas.getContext("2d");
 // Queue mode ("ingest"): the server hands out one claimed image at a time; Skip asks for another.
 // Browse mode ("labeled"): a plain list with Prev/Next, for fixing finished labels.
-const A = { queue: [], pos: 0, img: null, image: null, labels: [], sel: -1, cls: 0, drag: null, dirty: false, skipped: [] };
+// `sel` is the highlighted box (for Q/E/Del). `picked` is true only when the labeler clicked a
+// box on purpose: only then do the class keys relabel it. A box you just drew is highlighted but
+// not picked, so pressing 2 to draw a stick next cannot silently turn your sword into a stick.
+const A = { queue: [], pos: 0, img: null, image: null, labels: [], sel: -1, picked: false, cls: 0, drag: null, dirty: false, skipped: [] };
 const queueMode = () => $("#an-filter").value === "ingest";
 
 function classButtons() {
@@ -93,7 +96,9 @@ function classButtons() {
 }
 function setClass(i) {
   A.cls = i;
-  if (A.sel >= 0) { A.labels[A.sel].cls = i; A.labels[A.sel].source = touched(A.labels[A.sel].source); A.dirty = true; }
+  if (A.sel >= 0 && A.picked && A.labels[A.sel].cls !== i) {
+    A.labels[A.sel].cls = i; A.labels[A.sel].source = touched(A.labels[A.sel].source); A.dirty = true;
+  }
   classButtons(); draw();
 }
 // Editing an auto-label makes it a human label (the editor shows it as reviewed).
@@ -124,7 +129,7 @@ async function openImage(item) {
   if (!item) { A.image = null; return; }
   const { image, labels } = await api(`/api/images/${item.id}/labels`);
   A.image = image; A.labels = labels.map((l) => ({ cls: l.cls, points: l.points, source: l.source, score: l.score }));
-  A.sel = -1; A.dirty = false;
+  A.sel = -1; A.picked = false; A.dirty = false;
   const img = new Image();
   img.onload = () => { A.img = img; canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; draw(); };
   img.src = `/api/images/${item.id}/file?v=${image.status}`;
@@ -186,14 +191,15 @@ canvas.onmouseup = (e) => {
   if (d.box) {
     const [x0, x1] = [Math.min(d.x0, d.x1), Math.max(d.x0, d.x1)], [y0, y1] = [Math.min(d.y0, d.y1), Math.max(d.y0, d.y1)];
     A.labels.push({ cls: A.cls, points: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], source: "manual", score: null });
-    A.sel = A.labels.length - 1; A.dirty = true;
+    A.sel = A.labels.length - 1; A.picked = false; A.dirty = true;
   } else {
     // click: select the smallest box under the cursor
     const hits = A.labels.map((l, i) => [i, l]).filter(([, l]) => inside([d.x0, d.y0], l.points));
     const area = (p) => Math.abs(p.reduce((s, [x, y], i) => { const [u, v] = p[(i + 1) % 4]; return s + x * v - u * y; }, 0)) / 2;
     hits.sort((a, b) => area(a[1].points) - area(b[1].points));
     A.sel = hits.length ? hits[0][0] : -1;
-    if (A.sel >= 0) { A.cls = A.labels[A.sel].cls; classButtons(); }
+    A.picked = A.sel >= 0;
+    if (A.picked) { A.cls = A.labels[A.sel].cls; classButtons(); }
   }
   draw();
 };
@@ -254,7 +260,8 @@ document.addEventListener("keydown", (e) => {
   if (!$("#tab-annotate").classList.contains("active") || e.target.matches("input, textarea, select")) return;
   const k = e.key;
   if (k >= "1" && k <= String(CLASSES.length)) setClass(+k - 1);
-  else if (k === "Delete" || k === "Backspace") { if (A.sel >= 0) { A.labels.splice(A.sel, 1); A.sel = -1; A.dirty = true; draw(); } }
+  else if (k === "Delete" || k === "Backspace") { if (A.sel >= 0) { A.labels.splice(A.sel, 1); A.sel = -1; A.picked = false; A.dirty = true; draw(); } }
+  else if (k === "Escape") { A.sel = -1; A.picked = false; draw(); }
   else if (k === "q" || k === "Q") rotate(-5);
   else if (k === "e" || k === "E") rotate(5);
   else if (k === "s" || k === "S") save();

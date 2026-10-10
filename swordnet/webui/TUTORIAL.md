@@ -13,9 +13,12 @@ The first time, it asks your **name**: the queue and the logs use it.
 
 **Annotate**
 - *Queue* mode hands you the next image nobody else is working on. *Skip* gives it back.
-- Drag to draw a box. Click a box to select it. `1` sword, `2` stick, `Q`/`E` rotate the selected
-  box by 5°, `Del` deletes it, `S` saves, `Enter` = **Save + mark processed** (moves the file from
-  `ingest/` to `labeled/` and loads the next one).
+- Drag to draw a box. `1` sword / `2` stick choose the class of the **next** box you draw. To
+  relabel an existing box, click it first, then press `1`/`2`. `Q`/`E` rotate the selected box by
+  5°, `Del` deletes it, `Esc` deselects, `S` saves, `Enter` = **Save + mark processed** (moves the
+  file from `ingest/` to `labeled/` and loads the next one).
+- **Labeling rules:** box *every* sword and stick that is visible, even partly; include the whole
+  visible blade; sword = steel/metal blade, stick = wooden waster, bamboo shinai or plain stick.
 - Dashed boxes are auto-label proposals; a dot on a corner means SAM tightened it.
 - An image with no swords is still useful: mark it processed with no boxes (a negative example).
 - *Browse labeled* mode lets you go back and fix finished images.
