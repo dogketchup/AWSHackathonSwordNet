@@ -451,11 +451,12 @@ function showBest(r) {
   const d = r.decision;
   const pick = d && !d.stale ? d.pick : r.code_pick;
   $("#bm-pick").innerHTML = !r.table.length ? `No finished runs yet.` : pick == null ? `No run meets the target and fits the budget.`
-    : `<b>Pick: run ${pick}</b> (${d && !d.stale ? esc(d.by) : "code"}): ${esc(d && !d.stale ? d.why : r.reason)}
-       <a href="/api/best/weights/${pick}">Download best.pt</a>` +
-      (d && d.stale ? `<br><span class="hint">The last gpt-oss pick (run ${d.pick}) doesn't fit this budget; press Analyze to ask again.</span>` : "");
+    : `<b>Pick: ${esc(pick)}</b> (${d && !d.stale ? esc(d.by) : "code"}): ${esc(d && !d.stale ? d.why : r.reason)}
+       <a href="/api/best/weights/${encodeURIComponent(pick)}">Download best.pt</a>` +
+      (d && d.stale ? `<br><span class="hint">The last gpt-oss pick (${esc(d.pick)}) doesn't fit this budget; press Analyze to ask again.</span>` : "");
+  $("#bm-pick").innerHTML += `<br><span class="hint">Runs from: ${esc(r.source)}</span>`;
   $("#bm-table tbody").innerHTML = r.table.map((x) => `<tr title="${esc(r.summaries[x.id] || "")}">
-    <td>${x.id}</td><td>${esc(x.model)}</td><td>${x.n_train ?? "–"}</td><td>${fmt(x.mAP50)}</td><td>${fmt(x.mAP50_95)}</td>
+    <td>${esc(x.id)}</td><td>${esc(x.model)}</td><td>${x.n_train ?? "–"}</td><td>${fmt(x.mAP50)}</td><td>${fmt(x.mAP50_95)}</td>
     <td>${fmt(x.ms, 1)}</td><td>${fmt(x.mb, 1)}</td><td>${x.fits ? "yes" : esc(x.why_not)}</td></tr>`).join("")
     || `<tr><td colspan="8" class="hint">No finished runs yet.</td></tr>`;
 }

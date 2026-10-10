@@ -323,13 +323,13 @@ def best_analyze(target: float = 0.5, ms: float = 150, mb: float = 20, noise: fl
     return pick.analyze(target, ms, mb, noise)
 
 
-@app.get("/api/best/weights/{run_id}")
-def best_weights(run_id: int):
+@app.get("/api/best/weights/{key}")
+def best_weights(key: str):
     from swordnet.agent import pick
-    path = pick.weights_path(run_id)
+    path = pick.download(key)
     if not path:
-        raise HTTPException(404, "weights for this run are not on this laptop; pull them first")
-    return FileResponse(path, filename=f"swordnet-run{run_id}.pt")
+        raise HTTPException(404, f"{key}: not in the registry and not on this laptop")
+    return FileResponse(path, filename=Path(path).name)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
