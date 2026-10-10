@@ -31,11 +31,21 @@ from swordnet import config
 from swordnet.bridge import kube
 from swordnet.bridge.seats import SEATS, all_seats
 from swordnet.logs import log, log_lines
-from swordnet.storage import store
+from swordnet.storage import client, remote, store
 from swordnet.train import export
 
 REPO = config.REPO
-TRAIN_DEPS = "ultralytics opencv-python-headless pillow pyyaml httpx"
+
+
+class runs_db:
+    """Run history in the team database (storage/pod_api.py on the database seat), so every laptop
+    that drives the bridge numbers runs from the same counter and sees the same history."""
+    create_run = staticmethod(lambda model, epochs, cfg, **fields: client.call(
+        "create_run", {"model": model, "epochs": epochs, "config": cfg, "fields": fields})["id"])
+    update_run = staticmethod(lambda run_id, **fields: client.call("update_run", {"id": run_id, "fields": fields}))
+    list_runs = staticmethod(lambda limit=200: client.call("list_runs", {"limit": limit})["runs"])
+    get_run = staticmethod(lambda run_id: client.call("get_run", {"id": run_id})["run"])
+TRAIN_DEPS = "ultralytics opencv-python-headless pillow pyyaml httpx albumentations"
 AUX_DEPS = TRAIN_DEPS + " transformers"
 
 
@@ -180,7 +190,10 @@ def _slim(r):  # per-epoch history is large; the agents don't need it
 def cycle(a):
     snap = f"snap-{time.strftime('%Y%m%d-%H%M%S')}"
     local = config.DATASETS_DIR / snap
-    manifest = export.export(local)
+    # The snapshot is written from the team database on its seat, then relayed to the trainers.
+    res = client.call("export", {"name": snap})
+    manifest = res["manifest"]
+    kube.pull(remote.SEAT, res["path"], config.DATASETS_DIR)
     if manifest["n_train"] == 0 or manifest["n_val"] == 0:
         log("bridge", f"not enough labeled data yet: {manifest['n_train']} train / {manifest['n_val']} val",
             level="warning")
@@ -197,7 +210,7 @@ def cycle(a):
     if not seats:
         log("bridge", "every trainer seat is busy; try again later", level="warning")
         return False
-    history = [_slim(r) for r in store.list_runs(limit=30)]
+    history = [_slim(r) for r in runs_db.list_runs(limit=30)]
     planner = getattr(a, "planner", None)  # agent/explore.py passes gpt-oss's hypotheses here
     plan = planner(seats, manifest, history) if planner else json.loads(kube.py(
         SEATS["agent"], "swordnet.agent.plan", stdin_json={"seats": seats, "dataset": manifest, "history": history}))
@@ -211,7 +224,7 @@ def cycle(a):
         if a.max_epochs and r["epochs"] > a.max_epochs:
             reason += f" [epochs capped {r['epochs']} -> {a.max_epochs} by --max-epochs]"
             r["epochs"] = a.max_epochs
-        run_id = store.create_run(r["model"], r["epochs"], r, seat=seat, dataset_dir=snap, reason=reason,
+        run_id = runs_db.create_run(r["model"], r["epochs"], r, seat=seat, dataset_dir=snap, reason=reason,
                                   n_train=manifest["n_train"], n_val=manifest["n_val"])
         jobs.append((run_id, seat, r, reason))
 
@@ -226,10 +239,10 @@ def cycle(a):
                              f"--dataset {kube.DATA_DIR}/datasets/{snap} --run-dir {rdir} "
                              f"--config '{json.dumps(r)}'", log=f"{rdir}.log")
         except Exception as e:
-            store.update_run(run_id, status="failed", finished_at=time.time())
+            runs_db.update_run(run_id, status="failed", finished_at=time.time())
             log("bridge", f"run {run_id} could not start on {seat}: {e}", level="error", run_id=run_id, seat=seat)
             return None
-        store.update_run(run_id, status="running", started_at=time.time())
+        runs_db.update_run(run_id, status="running", started_at=time.time())
         log("bridge", f"run {run_id} started on {seat}: {r} ({reason})", run_id=run_id, seat=seat)
         return run_id, seat
 
@@ -270,7 +283,7 @@ def _check_run(run_id, seat):
 def collect(a):
     """Collect runs the DB still shows as running: finished on the pod but never pulled back
     (the bridge was stopped, or the laptop lost its network)."""
-    runs = [r for r in store.list_runs(limit=1000) if r["status"] == "running"]
+    runs = [r for r in runs_db.list_runs(limit=1000) if r["status"] == "running"]
     if not runs:
         print("nothing to collect")
         return
@@ -295,7 +308,7 @@ def finish_run(run_id, seat, st):
     if metrics:
         (config.METRICS_DIR / f"run-{run_id}.json").write_text(json.dumps(metrics, indent=2))
     best = local / "weights" / "best.pt"
-    store.update_run(run_id, status=st, metrics=metrics, finished_at=time.time(),
+    runs_db.update_run(run_id, status=st, metrics=metrics, finished_at=time.time(),
                      weights=str(best) if best.exists() else None)
     log("bridge", f"run {run_id} {st} on {seat}" + (f": best mAP50-95 {metrics.get('best_mAP50_95')}" if metrics else ""),
         level="info" if st == "done" else "error", run_id=run_id, seat=seat)
@@ -303,15 +316,15 @@ def finish_run(run_id, seat, st):
     if st == "done" and best.exists():
         try:
             from swordnet.bridge import registry
-            registry.publish_run(store.get_run(run_id))
+            registry.publish_run(runs_db.get_run(run_id))
         except Exception as e:  # sharing must never lose a collected run
             log("bridge", f"run {run_id}: publish to registry failed, retry with `bridge publish` ({e})",
                 level="warning", run_id=run_id)
 
 
 def write_report(run_id):
-    run = _slim(store.get_run(run_id))
-    previous = [_slim(r) for r in store.list_runs(limit=20) if r["id"] != run_id and r["status"] == "done"]
+    run = _slim(runs_db.get_run(run_id))
+    previous = [_slim(r) for r in runs_db.list_runs(limit=20) if r["id"] != run_id and r["status"] == "done"]
     req = {"run": run, "previous": previous}
     if config.LLMS["gptoss"]["base_url"]:
         from swordnet.agent import report  # gpt-oss is reachable from here; no need to go via a pod
@@ -321,14 +334,14 @@ def write_report(run_id):
     path = config.RUNS_DIR / f"run-{run_id}" / "report.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(md)
-    store.update_run(run_id, report_path=str(path))
+    runs_db.update_run(run_id, report_path=str(path))
     log("agent", f"report written for run {run_id}", run_id=run_id, path=str(path))
 
 
 def loop(a):
     last = -1
     while True:
-        n = store.queue_stats()["labeled"]
+        n = client.call("summary")["queue"]["labeled"]
         if last < 0 or n - last >= a.min_new:
             log("bridge", f"{n} labeled images; starting a training round")
             if cycle(a):
@@ -341,7 +354,7 @@ def loop(a):
 # --- deploy -----------------------------------------------------------------
 
 def promote(a):
-    runs = [r for r in store.list_runs(limit=1000) if r["status"] == "done" and r.get("weights")]
+    runs = [r for r in runs_db.list_runs(limit=1000) if r["status"] == "done" and r.get("weights")]
     if not runs:
         print("no finished runs with weights")
         return
@@ -355,7 +368,7 @@ def promote(a):
     log("agent", f"promote: run {choice['run']} ({choice['reason']})", run_id=choice["run"])
     if choice["run"] is None:
         return
-    run = store.get_run(choice["run"])
+    run = runs_db.get_run(choice["run"])
     seat, rdir = run["seat"], f"{kube.DATA_DIR}/runs/run-{run['id']}"
     out = f"{rdir}/smoke.json"
     kube.sh(seat, f"cd {kube.APP_DIR} && {kube.VENV_PY} -m swordnet.metrics.smoketest --weights {rdir}/weights/best.pt "
@@ -363,7 +376,7 @@ def promote(a):
             check=False, timeout=1800)
     tail_into_logs(seat, f"{rdir}/smoke.log", run_id=run["id"], job="smoketest")
     smoke = json.loads(kube.read(seat, out) or '{"pass": false, "checks": {"ran": {"pass": false, "detail": "no output"}}}')
-    store.update_run(run["id"], smoke=smoke)
+    runs_db.update_run(run["id"], smoke=smoke)
     (config.METRICS_DIR / f"run-{run['id']}-smoke.json").write_text(json.dumps(smoke, indent=2))
     if smoke["pass"]:
         store.coll("deploy").replace_one(
@@ -377,11 +390,11 @@ def promote(a):
 
 def pull_weights(a):
     if a.run:
-        run = store.get_run(a.run)
+        run = runs_db.get_run(a.run)
     else:
         cur = store.coll("deploy").find_one({"_id": "current"})
-        runs = [r for r in store.list_runs(limit=1000) if r["status"] == "done" and r.get("weights")]
-        run = store.get_run(cur["run"]) if cur else max(
+        runs = [r for r in runs_db.list_runs(limit=1000) if r["status"] == "done" and r.get("weights")]
+        run = runs_db.get_run(cur["run"]) if cur else max(
             runs, key=lambda r: (r["metrics"] or {}).get("best_mAP50_95") or 0, default=None)
     if not run or not run.get("weights") or not Path(run["weights"]).exists():
         print("no weights available (run `cycle` first)")
@@ -398,7 +411,7 @@ def pull_weights(a):
 def publish(a):
     from swordnet.bridge import registry
     index = registry.read_index()
-    for r in store.list_runs(limit=1000):
+    for r in runs_db.list_runs(limit=1000):
         if r["status"] == "done" and r.get("weights") and (a.all or f"run-{r['id']}" not in index):
             registry.publish_run(r)
     if not a.runs_only:

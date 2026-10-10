@@ -20,7 +20,14 @@ from pathlib import Path
 ALLOWED_MODELS = {"yolo11n-obb", "yolo11s-obb", "yolo11m-obb", "yolo11l-obb", "yolo11x-obb"}
 # train() kwargs the agent may set; anything else in the config is ignored.
 TRAIN_KEYS = {"epochs", "imgsz", "batch", "lr0", "lrf", "patience", "optimizer", "cos_lr",
-              "mosaic", "mixup", "degrees", "fliplr", "scale", "close_mosaic", "weight_decay", "dropout"}
+              "mosaic", "mixup", "degrees", "fliplr", "scale", "close_mosaic", "weight_decay", "dropout",
+              "translate", "flipud", "hsv_h", "hsv_s", "hsv_v"}
+# Augmentation, applied on the fly to each image every epoch (never to val, never stored), so a
+# small dataset looks different every pass: rotate +-90 deg (OBB boxes rotate with it), zoom
+# 0.5-1.5x, shift 10%, flips, hue/saturation/brightness jitter, mosaic. With albumentations
+# installed, ultralytics also adds blur, median blur, grayscale, CLAHE and brightness/contrast.
+AUGMENT = {"degrees": 90.0, "scale": 0.5, "translate": 0.1, "fliplr": 0.5, "flipud": 0.5,
+           "hsv_h": 0.015, "hsv_s": 0.7, "hsv_v": 0.4, "mosaic": 1.0}
 
 
 def run(dataset, run_dir, cfg):
@@ -42,7 +49,7 @@ def run(dataset, run_dir, cfg):
     model_name = cfg.get("model", "yolo11s-obb")
     if model_name not in ALLOWED_MODELS:
         raise ValueError(f"model {model_name!r} not in {sorted(ALLOWED_MODELS)}")
-    kwargs = {k: v for k, v in cfg.items() if k in TRAIN_KEYS}
+    kwargs = {**AUGMENT, **{k: v for k, v in cfg.items() if k in TRAIN_KEYS}}
     kwargs.setdefault("epochs", 50)
     kwargs.setdefault("imgsz", 640)
     kwargs.setdefault("patience", 20)

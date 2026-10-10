@@ -62,16 +62,17 @@ def test_cycle_uses_the_explorer_as_planner(monkeypatch, tmp_path):
     from swordnet.bridge import cli
     _patch(monkeypatch, [json.dumps(good())], tmp_path)
     started = []
-    monkeypatch.setattr(cli.export, "export", lambda d: {"n_train": 40, "n_val": 8})
+    ids = iter(range(100, 110))
+    team_db = {"export": lambda r: {"manifest": {"n_train": 40, "n_val": 8}, "path": f"/x/{r['name']}"},
+               "list_runs": lambda r: {"runs": HISTORY}, "create_run": lambda r: {"id": next(ids)},
+               "update_run": lambda r: {"ok": True}}
+    monkeypatch.setattr(cli.client, "call", lambda op, req=None, ttl=0: team_db[op](req))
     monkeypatch.setattr(cli, "SEATS", {"agent": "seat-145", "train": SEATS})
     monkeypatch.setattr(cli.kube, "running", lambda seat, pat: False)
     monkeypatch.setattr(cli.kube, "py", lambda *a, **k: (_ for _ in ()).throw(AssertionError("Qwen planner called")))
+    monkeypatch.setattr(cli.kube, "pull", lambda *a, **k: True)
     monkeypatch.setattr(cli.kube, "push", lambda *a, **k: None)
     monkeypatch.setattr(cli.kube, "spawn", lambda seat, script, log: started.append((seat, script)))
-    monkeypatch.setattr(cli.store, "list_runs", lambda limit: HISTORY)
-    ids = iter(range(100, 110))
-    monkeypatch.setattr(cli.store, "create_run", lambda *a, **k: next(ids))
-    monkeypatch.setattr(cli.store, "update_run", lambda *a, **k: None)
 
     assert explore.launch(0.5, 150, 20, max_epochs=10) is True
     assert sorted(s for s, _ in started) == ["seat-145", "seat-146"]
