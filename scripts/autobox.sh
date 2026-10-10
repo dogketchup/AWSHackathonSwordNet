@@ -19,7 +19,7 @@ while [ $# -gt 0 ]; do
     echo "$n photos/videos found"
     stamp="incoming-$(date +%s)"
     echo "uploading $dir to $SEAT ..."
-    COPYFILE_DISABLE=1 tar --no-mac-metadata -czf - -C "$dir" . | kubectl exec -i "$SEAT" -c app -- bash -c "mkdir -p $TOOLS/$stamp && tar xzf - -C $TOOLS/$stamp"
+    COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs -czf - -C "$dir" . | kubectl exec -i "$SEAT" -c app -- bash -c "mkdir -p $TOOLS/$stamp && tar xzf - -C $TOOLS/$stamp"
     args+=(--ingest "$TOOLS/$stamp")
   else
     args+=("$1"); shift

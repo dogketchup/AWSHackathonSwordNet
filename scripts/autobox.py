@@ -10,7 +10,8 @@ class-agnostic NMS, then one box per object: weak extras (< half the best score)
 mostly inside a stronger box are dropped. Boxes are axis-aligned (no SAM, no rotation).
 
 Decision per image:
-    every box >= --submit-conf        -> submitted as labels (labeler "autobox")
+    every box >= --submit-conf and no
+    nested/duplicate boxes were seen  -> submitted as labels (labeler "autobox")
     any box, but one below that       -> pre-filled, back in the queue for a person to confirm
     no box                            -> left in the queue untouched (never saved as "no sword here")
 Images a person holds are never touched: only free queue entries are claimed (pending, or a
@@ -76,6 +77,7 @@ def one_per_object(xyxy, scores, classes, rel=0.5, inside=0.6, encloses=0.85):
     """One box per sword: drop boxes scoring under `rel` x the image's best, then drop any box that
     lies mostly (> `inside` of its area) within a stronger kept box, or that wraps (> `encloses`)
     a stronger kept box. Crossed swords overlap but don't wrap each other, so both survive."""
+    one_per_object.overlapped = False
     dets = sorted(zip(xyxy, scores, classes), key=lambda d: -d[1])
     if not dets:
         return []
@@ -92,7 +94,9 @@ def one_per_object(xyxy, scores, classes, rel=0.5, inside=0.6, encloses=0.85):
             if iw > 0 and ih > 0 and (iw * ih / area > inside or iw * ih / k_area > encloses):
                 dup = True
                 break
-        if not dup:
+        if dup:
+            one_per_object.overlapped = True  # the detector saw nested boxes: count is unsure
+        else:
             kept.append((b, sc, c))
     return kept
 
@@ -105,7 +109,7 @@ def detector(min_conf: float):
     model.set_classes(texts, model.get_text_pe(texts))
 
     def detect(path: str, w: int, h: int) -> list:
-        r = model.predict(path, conf=min_conf, iou=0.5, agnostic_nms=True, verbose=False)[0]
+        r = model.predict(path, conf=min_conf, iou=0.7, agnostic_nms=True, verbose=False)[0]
         boxes = []
         for (x1, y1, x2, y2), score, c in one_per_object(r.boxes.xyxy.tolist(), r.boxes.conf.tolist(), r.boxes.cls.tolist()):
             pts = [[x1 / w, y1 / h], [x2 / w, y1 / h], [x2 / w, y2 / h], [x1 / w, y2 / h]]
@@ -113,7 +117,9 @@ def detector(min_conf: float):
                 boxes.append({**validate_obb({"cls": classes[int(c)], "points": pts}, S.classes), "score": round(score, 4)})
             except BoxError:
                 continue
+        detect.unsure = one_per_object.overlapped
         return boxes
+    detect.unsure = False
     return detect
 
 
@@ -134,7 +140,7 @@ def main():
         for p in sorted(Path(a.ingest).rglob("*")):
             if p.is_file() and p.suffix.lower() in IMAGE_EXT and (im := cv2.imread(str(p))) is not None:
                 boxes = detect(str(p), im.shape[1], im.shape[0])
-                sure = bool(boxes) and min(b["score"] for b in boxes) >= a.submit_conf
+                sure = bool(boxes) and min(b["score"] for b in boxes) >= a.submit_conf and not detect.unsure
                 print(json.dumps({"image": p.name, "boxes": [(b["cls"], b["score"]) for b in boxes],
                                   "action": "submit" if sure else ("prefill" if boxes else "leave")}), flush=True)
         print("SUMMARY dry run of the folder only; nothing was uploaded or labeled", flush=True)
@@ -151,7 +157,7 @@ def main():
             stats["errors"] += 1
             print(f"{sid}: detect failed: {e}", file=sys.stderr)
             continue
-        sure = bool(boxes) and min(b["score"] for b in boxes) >= a.submit_conf
+        sure = bool(boxes) and min(b["score"] for b in boxes) >= a.submit_conf and not detect.unsure
         print(json.dumps({"image": Path(s.filepath).name, "boxes": [(b["cls"], b["score"]) for b in boxes],
                           "action": "submit" if sure else ("prefill" if boxes else "leave")}), flush=True)
         if a.dry_run:
