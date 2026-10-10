@@ -88,13 +88,13 @@ def test_split_is_stable_and_groups_video_frames():
 
 def test_export_writes_yolo_obb(make_image, tmp_path):
     sid = make_image(w=200, h=100)
-    store.set_labels(store.get_sample(sid), [{"cls": 1, "points": [[20, 10], [180, 10], [180, 90], [20, 90]]}])
+    store.set_labels(store.get_sample(sid), [{"cls": 0, "points": [[20, 10], [180, 10], [180, 90], [20, 90]]}])
     store.mark_processed(sid)
     m = export.export(tmp_path / "snap")
     assert m["n_train"] + m["n_val"] >= 1
     name = Path(store.get_sample(sid).filepath).stem
     lbl = next((tmp_path / "snap" / "labels").rglob(f"{name}.txt")).read_text().split()
-    assert lbl[0] == "1" and np.allclose([float(v) for v in lbl[1:]], [0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9])
+    assert lbl[0] == "0" and np.allclose([float(v) for v in lbl[1:]], [0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9])
     assert "names:" in (tmp_path / "snap" / "data.yaml").read_text()
 
 

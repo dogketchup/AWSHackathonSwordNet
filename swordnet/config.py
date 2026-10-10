@@ -31,7 +31,9 @@ VIDEO_DIR = HOME / "videos"       # raw uploaded videos (frames go to INGEST_DIR
 DATASETS_DIR = HOME / "datasets"  # YOLO-OBB snapshots, one per training run
 RUNS_DIR = HOME / "runs"          # ultralytics output + reports, one dir per run
 
-CLASSES = ["sword", "stick"]
+# One class: the footage has only steel swords. Add classes here (and to autolabel.PROMPTS) if
+# that changes; label files and the editor follow this list.
+CLASSES = ["sword"]
 VAL_FRACTION = 0.20
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}

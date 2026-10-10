@@ -15,7 +15,7 @@ import sys
 
 from swordnet.agent import llm
 
-ANALYSIS_PROMPT = """You are reviewing a YOLO-OBB training run for SwordNet (detects swords and sticks).
+ANALYSIS_PROMPT = """You are reviewing a YOLO-OBB training run for SwordNet (detects swords).
 Run {run_no}: model {model}, config {config}.
 Dataset: {dataset}
 Metrics: {metrics}

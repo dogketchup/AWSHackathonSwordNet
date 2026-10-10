@@ -29,7 +29,7 @@ and drops exact duplicates by content hash. **Only scrape sites whose terms allo
 ## Auto-labeler ([`autolabel.py`](autolabel.py))
 
 Zero-shot detectors that need no training: **OWLv2** (default) and **Grounding DINO**, prompted with
-several phrasings per class ("a sword", "a longsword", "a katana", … / "a stick", "a wooden staff", …).
+several phrasings ("a sword", "a longsword", "a steel training sword", …).
 Overlapping hits from different phrasings are merged with NMS.
 
 It runs only for upload sets whose **Auto-label** toggle is on (Upload tab → Datasets table):

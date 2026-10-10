@@ -13,7 +13,7 @@ import sys
 
 from swordnet.agent import llm
 
-PROMPT = """You choose which trained SwordNet detector (oriented boxes around swords and sticks)
+PROMPT = """You choose which trained SwordNet detector (oriented boxes around swords)
 to deploy on {target}. Candidates (finished runs):
 {runs}
 Currently deployed run: {current}

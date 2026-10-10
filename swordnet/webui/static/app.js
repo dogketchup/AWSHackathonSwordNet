@@ -18,7 +18,7 @@ const api = async (path, opts = {}) => {
 };
 const json = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-let CLASSES = ["sword", "stick"];
+let CLASSES = ["sword"];
 
 // --- tabs --------------------------------------------------------------------
 document.querySelectorAll("nav button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
@@ -85,7 +85,7 @@ const canvas = $("#an-canvas"), ctx = canvas.getContext("2d");
 // Browse mode ("labeled"): a plain list with Prev/Next, for fixing finished labels.
 // `sel` is the highlighted box (for Q/E/Del). `picked` is true only when the labeler clicked a
 // box on purpose: only then do the class keys relabel it. A box you just drew is highlighted but
-// not picked, so pressing 2 to draw a stick next cannot silently turn your sword into a stick.
+// not picked, so choosing a class for the next box cannot silently relabel the one you just drew.
 const A = { queue: [], pos: 0, img: null, image: null, labels: [], sel: -1, picked: false, cls: 0, drag: null, dirty: false, skipped: [] };
 const queueMode = () => $("#an-filter").value === "ingest";
 

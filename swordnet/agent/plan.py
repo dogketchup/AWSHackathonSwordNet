@@ -20,7 +20,7 @@ FLEX_MODELS = ["yolo11n-obb", "yolo11s-obb", "yolo11m-obb", "yolo11l-obb"]
 LIMITS = {"epochs": (5, 300), "imgsz": (320, 1280), "batch": (2, 64), "lr0": (1e-5, 0.1)}
 OPTIONAL = {"lr0", "mosaic", "mixup", "degrees", "fliplr", "scale", "cos_lr", "patience", "weight_decay"}
 
-PROMPT = """You plan YOLO-OBB training runs for SwordNet, a detector for swords and sticks
+PROMPT = """You plan YOLO-OBB training runs for SwordNet, a detector for swords
 (oriented boxes). Training is on CPU (11 cores per seat), so a run's cost grows with
 epochs x images x model size. Each seat has a fixed model size.
 
