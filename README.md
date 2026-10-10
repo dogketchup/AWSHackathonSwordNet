@@ -5,6 +5,7 @@ webui should have upload tab, and annotate tab where as a distributed system, op
 webui should also have a webscraper integration and an autolabeler(grounding dino, ownlv2) integration
 after labeling fifty-fifty should move files from ingest to labeled dir
 20% of training should be allocated to validation
+need a queuing system where as a user pulls an image to annotate from ingest
 
 SAM should be run on ingested files to create a mask and opencv should be used to slim the OBB box down and fine tune accuracy for labeling\
 
