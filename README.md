@@ -16,6 +16,11 @@ while the human labelers provide images and annotations.
 each new run should handle grabbing all the ingested images
 local tritanium Agent should write up a report on ("run count",yolo model(interested in small, medium, and large) , and how many training epochs, over fitting, and other ML metrics me as a human missed in thinking of)
 
+For agenting loop, have qwne 3.8 8B model run deloyments and testing, scripts for metrics need to be placed in a metrics directory( readable by webui)
+and jchatgbt 20B agent should write report analysis. Reports should also be logs accessible by webui
+
+Database stuff should be done with same fifty fifty DB
+
 should also have an easy way(.sh script and p1s script) to grab output weights, and load them in to a local deployment.
 
 For human operators, I would like TUTORIAL.md files for each component so we can understand the architecture 
