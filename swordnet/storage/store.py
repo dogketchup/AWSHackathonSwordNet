@@ -234,7 +234,9 @@ def claim_next(user, collection=None, skip=()):
     if mine:
         return str(mine["_id"])
     q = {"status": "ingest",
-         "$or": [{"claimed_by": None}, {"claim_expires": {"$lt": now}}],
+         # A claim with no expiry (written by other code, or a crash mid-claim) counts as stale,
+         # or the image would stay locked to that person forever.
+         "$or": [{"claimed_by": None}, {"claim_expires": None}, {"claim_expires": {"$lt": now}}],
          "_id": {"$nin": [ObjectId(i) for i in skip]}}
     if collection:
         q["collection"] = collection

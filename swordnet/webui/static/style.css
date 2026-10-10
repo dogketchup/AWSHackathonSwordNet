@@ -71,3 +71,5 @@ pre:empty { display: none; }
 .thumb .sub { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thumb.annotating { border-color: var(--accent); } .thumb.labeled { border-color: var(--ok); }
 #metrics-list a { margin-right: 10px; cursor: pointer; color: var(--accent); }
+
+.toast { position: sticky; top: 0; z-index: 10; margin: 8px 16px; padding: 8px 12px; border-radius: 6px; background: #5a1d1d; color: #ffd9d9; }

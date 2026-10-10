@@ -214,13 +214,13 @@ function rotate(deg) {
 }
 
 async function save() {
-  if (!A.image) return;
+  if (!A.image) { $("#an-info").textContent = "No image loaded: the queue is empty, or press Next."; return; }
   await api(`/api/images/${A.image.id}/labels`, json("PUT", { labels: A.labels }));
   A.dirty = false;
   $("#an-info").textContent = `Saved ${A.labels.length} box(es) on ${A.image.filename}`;
 }
 async function done() {
-  if (!A.image) return;
+  if (!A.image) { $("#an-info").textContent = "No image loaded: the queue is empty, or press Next."; return; }
   // Accepting an image confirms its boxes, including auto-label proposals the labeler kept.
   A.labels = A.labels.map((l) => ({ ...l, source: touched(l.source) }));
   await save();
@@ -468,3 +468,11 @@ $("#bm-analyze").onclick = async () => {
   $("#bm-pick").textContent = "Analyzing (summarizing new run logs, asking gpt-oss)…";
   try { showBest(await api(`/api/best/analyze?${bmQuery()}`, { method: "POST" })); } catch (e) { $("#bm-pick").textContent = e.message; }
 };
+
+// Any button whose request fails shows why, instead of looking like the click did nothing.
+window.addEventListener("unhandledrejection", (e) => {
+  const msg = `Action failed: ${e.reason?.message || e.reason}`;
+  const t = $("#toast");
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(t._h); t._h = setTimeout(() => (t.hidden = true), 8000);
+});
