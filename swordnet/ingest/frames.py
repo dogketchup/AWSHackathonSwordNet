@@ -29,7 +29,9 @@ def extract(video_path, dataset, every_s=0.5, max_frames=2000):
         if idx % step == 0:
             path = config.INGEST_DIR / f"{video_path.stem}_f{idx:06d}.jpg"
             cv2.imwrite(str(path), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
-            ids.append(store.add_image(path, dataset, f"video:{video_path.name}#{idx}"))
+            sid = store.add_image(path, dataset, f"video:{video_path.name}#{idx}")
+            if sid:  # None: the same video (or a frame of it) was uploaded before
+                ids.append(sid)
         idx += 1
     cap.release()
     return ids

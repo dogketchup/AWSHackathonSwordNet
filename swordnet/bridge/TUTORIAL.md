@@ -26,6 +26,10 @@ Credentials come from `.env`, never from the repo.
 
 ```bash
 B=".venv/bin/python -m swordnet.bridge.cli"
-$B setup | status | push-code | autolabel | refine | cycle | loop | report N | promote | pull-weights
+$B setup | status | push-code | autolabel | refine | cycle | loop | collect | report N | promote | pull-weights
 ```
 After changing code under `swordnet/`, run `push-code` so the pods get it.
+
+Training keeps going on the pods if the bridge stops or your laptop drops off the network. When you
+are back, `collect` pulls back every run the DB still shows as running and writes its report.
+Piece transfers retry with backoff for about a minute, which covers a Wi-Fi or DNS blip.

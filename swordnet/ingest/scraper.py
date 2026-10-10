@@ -76,7 +76,9 @@ def scrape(urls, dataset, limit=200):
                 seen.add(h)
                 path = config.INGEST_DIR / f"{h}_.jpg"
                 im.save(path, quality=92)
-                added.append(store.add_image(path, dataset, f"scrape:{u}"))
+                sid = store.add_image(path, dataset, f"scrape:{u}")
+                if sid:
+                    added.append(sid)
     return added
 
 

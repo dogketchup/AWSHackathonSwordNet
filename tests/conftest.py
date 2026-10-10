@@ -33,7 +33,7 @@ def make_image():
     def _make(collection="test", origin=None, w=320, h=240):
         config.ensure_dirs()
         path = config.INGEST_DIR / f"t{uuid.uuid4().hex[:10]}.jpg"
-        img = np.full((h, w, 3), 90, np.uint8)
+        img = np.random.default_rng().integers(60, 120, (h, w, 3), dtype=np.uint8)  # unique bytes per image
         cv2.line(img, (40, 200), (280, 40), (230, 230, 230), 6)  # a "blade"
         cv2.imwrite(str(path), img)
         return store.add_image(path, collection, origin or f"upload:{path.name}")

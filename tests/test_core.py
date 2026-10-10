@@ -238,3 +238,16 @@ def test_image_states(make_image, client):
     assert [i["id"] for i in only] == [annotating]
     counts = client.get("/api/images/states").json()
     assert counts["annotating"] >= 1 and counts["pending"] >= 1 and counts["labeled"] >= 1
+
+
+def test_upload_skips_duplicates(client, tmp_path):
+    import cv2
+    img = tmp_path / "d.jpg"
+    cv2.imwrite(str(img), np.random.default_rng(7).integers(0, 255, (80, 120, 3), dtype=np.uint8))
+    files = lambda: [("files", ("d.jpg", img.read_bytes(), "image/jpeg"))]
+    first = client.post("/api/upload", files=files(), data={"dataset": "dup"}).json()
+    n_files = len(list(config.INGEST_DIR.iterdir()))
+    again = client.post("/api/upload", files=files(), data={"dataset": "dup"}).json()
+    assert first["added"] == 1 and first["duplicates"] == []
+    assert again["added"] == 0 and again["duplicates"] == ["d.jpg"]
+    assert len(list(config.INGEST_DIR.iterdir())) == n_files, "the rejected copy's file was deleted"

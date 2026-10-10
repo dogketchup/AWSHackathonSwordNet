@@ -74,7 +74,7 @@ def queue():
 async def upload(files: list[UploadFile] = File(...), dataset: str = Form("default"),
                  every: float = Form(0.5), x_labeler: str = Header("anonymous")):
     config.ensure_dirs()
-    added, videos, skipped = [], [], []
+    added, videos, skipped, dupes = [], [], [], []
     for f in files:
         ext = Path(f.filename or "").suffix.lower()
         if ext in config.IMAGE_EXTS:
@@ -87,7 +87,11 @@ async def upload(files: list[UploadFile] = File(...), dataset: str = Form("defau
                 dst.unlink()
                 skipped.append(f.filename)
                 continue
-            added.append(store.add_image(dst, dataset, f"upload:{f.filename}"))
+            sid = store.add_image(dst, dataset, f"upload:{f.filename}")
+            if sid is None:
+                dupes.append(f.filename)
+            else:
+                added.append(sid)
         elif ext in config.VIDEO_EXTS:
             dst = config.VIDEO_DIR / f"{Path(f.filename).stem}-{uuid.uuid4().hex[:6]}{ext}"
             with dst.open("wb") as out:
@@ -98,8 +102,9 @@ async def upload(files: list[UploadFile] = File(...), dataset: str = Form("defau
         else:
             skipped.append(f.filename)
     log("webui", f"upload to {dataset}: {len(added)} images" + (f", {len(videos)} videos" if videos else "")
-        + (f", skipped {skipped}" if skipped else ""), user=x_labeler, level="warning" if skipped else "info")
-    return {"added": len(added), "videos": videos, "skipped": skipped}
+        + (f", {len(dupes)} duplicates skipped" if dupes else "") + (f", unreadable {skipped}" if skipped else ""),
+        user=x_labeler, level="warning" if skipped else "info")
+    return {"added": len(added), "videos": videos, "skipped": skipped, "duplicates": dupes}
 
 
 class ScrapeReq(BaseModel):

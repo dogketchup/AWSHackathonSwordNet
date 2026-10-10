@@ -16,6 +16,7 @@ Everything lives in FiftyOne's MongoDB (started automatically by `import fiftyon
 
 The web UI works in pixels; conversion happens here and nowhere else.
 """
+import hashlib
 import os
 import shutil
 import sys
@@ -36,7 +37,8 @@ CLAIM_SECONDS = 10 * 60  # a labeler holds an image this long without saving bef
 
 _FIELDS = (("status", fo.StringField), ("collection", fo.StringField), ("origin", fo.StringField),
            ("claimed_by", fo.StringField), ("claim_expires", fo.FloatField),
-           ("ingested_at", fo.FloatField), ("labeled_at", fo.FloatField), ("labeled_by", fo.StringField))
+           ("ingested_at", fo.FloatField), ("labeled_at", fo.FloatField), ("labeled_by", fo.StringField),
+           ("content_hash", fo.StringField))
 _schema_ok = False
 
 
@@ -96,11 +98,41 @@ def list_collections():
 
 # --- images -----------------------------------------------------------------
 
-def add_image(path, collection, origin):
-    """Register a file already in INGEST_DIR. Returns the sample id."""
+def file_hash(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _backfill_hashes(ds):
+    """Images added before dedup existed get their hash the first time it is needed."""
+    for s in ds.match(~fo.ViewField("content_hash").exists()).select_fields("filepath"):
+        if os.path.exists(s.filepath):
+            _samples_coll(ds).update_one({"_id": ObjectId(s.id)}, {"$set": {"content_hash": file_hash(s.filepath)}})
+
+
+def find_duplicate(path, ds=None):
+    """Id of an image already in the dataset with exactly the same bytes, else None."""
+    ds = ds or dataset()
+    _backfill_hashes(ds)
+    doc = _samples_coll(ds).find_one({"content_hash": file_hash(path)}, {"_id": 1})
+    return str(doc["_id"]) if doc else None
+
+
+def add_image(path, collection, origin, dedup=True):
+    """Register a file already in INGEST_DIR. Returns the sample id.
+
+    With dedup (the default), a file whose bytes are already in the dataset is deleted and
+    None is returned: a duplicate could land in train and val at once and inflate val mAP.
+    """
     ds = dataset()
+    if dedup and find_duplicate(path, ds):
+        os.remove(path)
+        return None
     s = fo.Sample(filepath=str(path), status="ingest", collection=collection, origin=origin,
-                  ingested_at=time.time())
+                  ingested_at=time.time(), content_hash=file_hash(path))
     s.metadata = fo.ImageMetadata.build_for(str(path))
     ds.add_sample(s)
     coll("collections").update_one({"_id": collection}, {"$setOnInsert": {"autolabel": False}}, upsert=True)

@@ -6,6 +6,7 @@
     python -m swordnet.bridge.cli refine         # SAM-tighten boxes on ingest images into OBBs
     python -m swordnet.bridge.cli cycle          # one training round on every trainer seat
     python -m swordnet.bridge.cli loop           # rolling rounds as new labels arrive
+    python -m swordnet.bridge.cli collect        # pull back runs that finished while the bridge was away
     python -m swordnet.bridge.cli promote        # Qwen picks the run to deploy; smoke-tests it
     python -m swordnet.bridge.cli pull-weights   # promoted (or best) weights -> ./weights/
 
@@ -232,14 +233,12 @@ def cycle(a):
         return True
 
     def check(job):
-        run_id, seat = job
-        rdir = f"{kube.DATA_DIR}/runs/run-{run_id}"
-        tail_into_logs(seat, f"{rdir}.log", run_id=run_id)
-        st = kube.read(seat, f"{rdir}/status")
-        if st in ("done", "failed") or not kube.running(seat, f"run-dir {rdir}"):
-            finish_run(run_id, seat, st if st in ("done", "failed") else "failed")
-            return True
-        return False
+        try:
+            return _check_run(*job)
+        except Exception as e:  # e.g. the laptop's network dropped; try again next poll
+            log("bridge", f"run {job[0]} on {job[1]}: check failed, will retry ({str(e)[-200:]})",
+                level="warning", run_id=job[0])
+            return False
 
     pending = list(started)
     while pending:
@@ -248,6 +247,33 @@ def cycle(a):
             finished = list(pool.map(check, pending))
         pending = [j for j, f in zip(pending, finished) if not f]
     return True
+
+
+def _check_run(run_id, seat):
+    """True once the run has ended on its pod and has been collected."""
+    rdir = f"{kube.DATA_DIR}/runs/run-{run_id}"
+    tail_into_logs(seat, f"{rdir}.log", run_id=run_id)
+    st = kube.read(seat, f"{rdir}/status")
+    if st in ("done", "failed") or not kube.running(seat, f"run-dir {rdir}"):
+        finish_run(run_id, seat, st if st in ("done", "failed") else "failed")
+        return True
+    return False
+
+
+def collect(a):
+    """Collect runs the DB still shows as running: finished on the pod but never pulled back
+    (the bridge was stopped, or the laptop lost its network)."""
+    runs = [r for r in store.list_runs(limit=1000) if r["status"] == "running"]
+    if not runs:
+        print("nothing to collect")
+        return
+    for r in runs:
+        try:
+            done = _check_run(r["id"], r["seat"])
+            print(f"run {r['id']} on {r['seat']}: {'collected' if done else 'still training'}")
+        except Exception as e:
+            log("bridge", f"run {r['id']} on {r['seat']}: collect failed ({str(e)[-200:]})", level="error",
+                run_id=r["id"])
 
 
 def finish_run(run_id, seat, st):
@@ -377,6 +403,7 @@ def main():
         if name == "loop":
             s.add_argument("--min-new", type=int, default=50, help="new labeled images per round")
             s.add_argument("--every", type=int, default=300, help="seconds between checks")
+    sub.add_parser("collect").set_defaults(fn=collect)
     s = sub.add_parser("report"); s.set_defaults(fn=lambda a: write_report(a.run))
     s.add_argument("run", type=int)
     s = sub.add_parser("promote"); s.set_defaults(fn=promote)

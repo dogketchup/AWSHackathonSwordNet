@@ -46,7 +46,9 @@ async function uploadFiles(files) {
   try {
     const r = await api("/api/upload", { method: "POST", body: fd });
     const v = r.videos.map((x) => `${x.video}: ${x.frames} frames`).join(", ");
-    $("#up-msg").textContent = `Added ${r.added} image(s).${v ? " " + v : ""}`;
+    const d = r.duplicates.length ? ` Skipped ${r.duplicates.length} already in the dataset: ${r.duplicates.join(", ")}.` : "";
+    const bad = r.skipped.length ? ` Could not read: ${r.skipped.join(", ")}.` : "";
+    $("#up-msg").textContent = `Added ${r.added} image(s).${v ? " " + v : ""}${d}${bad}`;
   } catch (e) { $("#up-msg").textContent = e.message; }
   loadDatasets();
 }

@@ -56,7 +56,7 @@ def spawn(seat, script, log):
 # is checked against its own SHA-256 and retried until it matches.
 CHUNK = 1024 * 1024
 PARALLEL = 6
-RETRIES = 6
+RETRIES = 8  # backoff 1+2+4+8+15+15+15 s: rides out a laptop Wi-Fi/DNS blip of ~1 min
 
 
 def _exec_bytes(seat, script, input=None, timeout=120):
@@ -78,7 +78,7 @@ def _retry(fn, what):
         except RuntimeError as e:
             if attempt == RETRIES:
                 raise RuntimeError(f"{what} failed {RETRIES} times: {e}")
-            time.sleep(attempt)
+            time.sleep(min(15, 2 ** (attempt - 1)))
 
 
 def _sha(b):
