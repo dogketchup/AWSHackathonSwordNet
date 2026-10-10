@@ -12,12 +12,14 @@ import cv2
 from swordnet import config
 
 
-def extract(video_path, dataset, every_s=0.5, max_frames=2000, out_dir=None, register=True):
+def extract(video_path, dataset, every_s=0.5, max_frames=2000, out_dir=None, register=True, max_side=None):
     """Sample frames from a video.
 
     register=True: write them into INGEST_DIR and the local store; returns sample ids.
     register=False: only write the files into out_dir; returns [(path, origin)] for the caller
     to send to the team database.
+    max_side: shrink frames so their long side is at most this many pixels (uploads are smaller;
+    YOLO trains at 640-800 px anyway).
     """
     video_path = Path(video_path)
     out_dir = Path(out_dir or config.INGEST_DIR)
@@ -35,6 +37,10 @@ def extract(video_path, dataset, every_s=0.5, max_frames=2000, out_dir=None, reg
             break
         if idx % step == 0:
             path = out_dir / f"{video_path.stem}_f{idx:06d}.jpg"
+            if max_side and max(frame.shape[:2]) > max_side:
+                k = max_side / max(frame.shape[:2])
+                frame = cv2.resize(frame, (round(frame.shape[1] * k), round(frame.shape[0] * k)),
+                                   interpolation=cv2.INTER_AREA)
             cv2.imwrite(str(path), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
             origin = f"video:{video_path.name}#{idx}"
             if not register:
