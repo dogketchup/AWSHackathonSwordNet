@@ -1,29 +1,57 @@
-# overview
-need to build a fifty-fifty db on tritium hardware via a kubernetes bridge
-for interacting with the DB the hardware a local webUI should ingest photos and videos, have user create Bounding Box labeling sets around swords and sticksd
-webui should have upload tab, and annotate tab where as a distributed system, operators or webscraping agents can upload images, and labelers can annotate and mark ingest images as processed
-webui should also have a webscraper integration and an autolabeler(grounding dino, ownlv2) integration
-after labeling fifty-fifty should move files from ingest to labeled dir
-20% of training should be allocated to validation
-need a queuing system where as a user pulls an image to annotate from ingest
+# SwordNet: project overview
 
-for kubernetes bridging, secrets need to be in a .env file, and there is **NO** push secrets tokens, etc into this repo
+**Goal:** Build a sword and stick detection pipeline. It has a FiftyOne dataset and model training on AWS
+Trainium hardware, reached from a local web UI through a Kubernetes bridge.
 
-SAM should be run on ingested files to create a mask and opencv should be used to slim the OBB box down and fine tune accuracy for labeling\
+## 1. Data and storage
 
-On tritanium hardware local agent should kick off rolling trainings sessions on multiple yolo models and instance,
-while the human labelers provide images and annotations.
-each new run should handle grabbing all the ingested images
-local tritanium Agent should write up a report on ("run count",yolo model(interested in small, medium, and large) , and how many training epochs, over fitting, and other ML metrics me as a human missed in thinking of)
+- One FiftyOne database holds all data, labels and run history.
+- It runs on the Trainium machine and is reached through a Kubernetes bridge.
+- Secrets (AWS keys, tokens) live only in a `.env` file. No secrets or tokens are ever committed or pushed to
+  the repo.
 
-For agenting loop, have qwne 3.8 8B model run deloyments and testing, scripts for metrics need to be placed in a metrics directory( readable by webui)
-and jchatgbt 20B agent should write report analysis. Reports should also be logs accessible by webui
+## 2. Web UI (runs locally)
 
-Database stuff should be done with same fifty fifty DB
+- **Upload tab:** operators, or web-scraping agents, upload photos and videos into an ingest folder.
+- **Annotate tab:** labelers draw oriented bounding boxes around swords and sticks, then mark each image as done.
+- **Built-in tools:** a web scraper, and an auto-labeler (Grounding DINO or OWLv2) that suggests boxes before a
+  human reviews them.
+- **Queue:** each labeler pulls the next image from ingest. No two labelers get the same image, so many people
+  can work at once.
+- **On save:** the file moves from ingest to labeled, and the label is stored in FiftyOne.
 
-should also have an easy way(.sh script and p1s script) to grab output weights, and load them in to a local deployment.
+## 3. Label refinement
 
-For human operators, I would like TUTORIAL.md files for each component so we can understand the architecture 
+- SAM runs on each ingested image and makes a mask of the object.
+- OpenCV fits a tight rotated box to that mask, so labels are more accurate with less manual adjustment.
 
+## 4. Training on Trainium
 
+- A local agent keeps running training rounds on several YOLO models (small, medium and large), with repeated
+  runs of each, while labelers keep adding data.
+- Each new round picks up all newly labeled images.
+- 20% of the data is held out for validation.
 
+## 5. Agents
+
+- **Qwen3-8B** runs deployment and testing: it plans the runs, launches training and picks the best model.
+- **gpt-oss-20b** writes the analysis report for each round.
+
+## 6. Metrics and reports
+
+- Metrics scripts live in a `metrics/` folder, and the web UI can read their output.
+- Each report covers:
+  - run count, model size (S/M/L) and number of epochs
+  - overfitting
+  - any other ML issues a human might miss
+- Reports and logs can be viewed in the web UI.
+
+## 7. Using the trained model
+
+- `.sh` (Linux/macOS) and `.ps1` (Windows) scripts download the latest weights and load them into a local
+  deployment.
+
+## 8. Documentation
+
+- Each component has a `TUTORIAL.md` that explains how it works and how it fits into the overall architecture,
+  for human operators.
