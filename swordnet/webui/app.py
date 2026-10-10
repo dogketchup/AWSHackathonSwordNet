@@ -309,4 +309,27 @@ def get_logs(source: str | None = None, run_id: int | None = None, level: str | 
             "entries": logs.query(source=source, run_id=run_id, level=level, after=after, text=q, limit=limit)}
 
 
+# --- best model (agent/pick.py): ranks logged runs; no model is re-run ---------
+
+@app.get("/api/best")
+def best_current(target: float = 0.5, ms: float = 150, mb: float = 20, noise: float = 0.02):
+    from swordnet.agent import pick
+    return pick.current(target, ms, mb, noise)
+
+
+@app.post("/api/best/analyze")
+def best_analyze(target: float = 0.5, ms: float = 150, mb: float = 20, noise: float = 0.02):
+    from swordnet.agent import pick
+    return pick.analyze(target, ms, mb, noise)
+
+
+@app.get("/api/best/weights/{run_id}")
+def best_weights(run_id: int):
+    from swordnet.agent import pick
+    path = pick.weights_path(run_id)
+    if not path:
+        raise HTTPException(404, "weights for this run are not on this laptop; pull them first")
+    return FileResponse(path, filename=f"swordnet-run{run_id}.pt")
+
+
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

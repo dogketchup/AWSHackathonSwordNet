@@ -14,6 +14,7 @@
     <button data-tab="images">Images</button>
     <button data-tab="annotate">Annotate</button>
     <button data-tab="reports">Reports</button>
+    <button data-tab="best">Best model</button>
     <button data-tab="cluster">Cluster</button>
     <button data-tab="logs">Logs</button>
   </nav>
@@ -97,6 +98,21 @@
       <div id="metrics-list" class="hint">None yet.</div>
       <pre id="metrics-view"></pre>
     </div>
+  </section>
+
+  <!-- Best model --------------------------------------------------------->
+  <section id="tab-best" class="tab">
+    <div class="card">
+      <h2>Best model <span class="hint">(from logged runs; nothing is re-run)</span></h2>
+      <label>Target mAP50 <input id="bm-target" type="number" step="0.01" value="0.5"></label>
+      <label>Max ms/image <input id="bm-ms" type="number" step="1" value="150"></label>
+      <label>Max MB <input id="bm-mb" type="number" step="0.5" value="20"></label>
+      <label>Noise <input id="bm-noise" type="number" step="0.005" value="0.02"></label>
+      <button id="bm-analyze" class="primary">Analyze with gpt-oss</button>
+      <p class="hint">Changing a number re-ranks instantly. Analyze summarizes new run logs and asks gpt-oss-20b to pick.</p>
+      <div id="bm-pick" class="msg"></div>
+    </div>
+    <div class="card"><table id="bm-table"><thead><tr><th>run</th><th>model</th><th>train imgs</th><th>mAP50</th><th>mAP50-95</th><th>ms</th><th>MB</th><th>fits</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <!-- Cluster --------------------------------------------------------------->

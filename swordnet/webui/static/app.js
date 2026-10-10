@@ -25,7 +25,7 @@ document.querySelectorAll("nav button").forEach((b) => b.onclick = () => showTab
 function showTab(name) {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === `tab-${name}`));
-  ({ upload: loadDatasets, images: loadImages, annotate: loadQueue, reports: loadRuns, cluster: loadCluster, logs: loadLogs })[name]();
+  ({ upload: loadDatasets, images: loadImages, annotate: loadQueue, reports: loadRuns, best: loadBest, cluster: loadCluster, logs: loadLogs })[name]();
 }
 
 async function refreshStats() {
@@ -444,3 +444,26 @@ window.addEventListener("pagehide", () => {
 setInterval(refreshStats, 15000);
 api("/api/config").then((c) => { CLASSES = c.classes; classButtons(); });
 loadDatasets();
+
+// --- best model ----------------------------------------------------------------
+const bmQuery = () => ["target", "ms", "mb", "noise"].map((k) => `${k}=${encodeURIComponent($(`#bm-${k}`).value)}`).join("&");
+function showBest(r) {
+  const d = r.decision;
+  const pick = d && !d.stale ? d.pick : r.code_pick;
+  $("#bm-pick").innerHTML = pick == null ? `No run meets the target and fits the budget.`
+    : `<b>Pick: run ${pick}</b> (${d && !d.stale ? esc(d.by) : "code"}): ${esc(d && !d.stale ? d.why : r.reason)}
+       <a href="/api/best/weights/${pick}">Download best.pt</a>` +
+      (d && d.stale ? `<br><span class="hint">The last gpt-oss pick (run ${d.pick}) doesn't fit this budget; press Analyze to ask again.</span>` : "");
+  $("#bm-table tbody").innerHTML = r.table.map((x) => `<tr title="${esc(r.summaries[x.id] || "")}">
+    <td>${x.id}</td><td>${esc(x.model)}</td><td>${x.n_train ?? "–"}</td><td>${fmt(x.mAP50)}</td><td>${fmt(x.mAP50_95)}</td>
+    <td>${fmt(x.ms, 1)}</td><td>${fmt(x.mb, 1)}</td><td>${x.fits ? "yes" : esc(x.why_not)}</td></tr>`).join("")
+    || `<tr><td colspan="8" class="hint">No finished runs yet.</td></tr>`;
+}
+async function loadBest() {
+  try { showBest(await api(`/api/best?${bmQuery()}`)); } catch (e) { $("#bm-pick").textContent = e.message; }
+}
+["target", "ms", "mb", "noise"].forEach((k) => $(`#bm-${k}`).onchange = loadBest);
+$("#bm-analyze").onclick = async () => {
+  $("#bm-pick").textContent = "Analyzing (summarizing new run logs, asking gpt-oss)…";
+  try { showBest(await api(`/api/best/analyze?${bmQuery()}`, { method: "POST" })); } catch (e) { $("#bm-pick").textContent = e.message; }
+};

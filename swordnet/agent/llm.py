@@ -19,10 +19,14 @@ def chat(prompt, which="qwen", max_tokens=2048, think=False, temperature=0.4):
                 max_tokens=max_tokens, temperature=temperature, top_p=0.95)
     if which == "qwen":
         body["chat_template_kwargs"] = {"enable_thinking": think}
-    r = httpx.post(f"{llm['base_url'].rstrip('/')}/chat/completions", json=body, timeout=900)
+    # The gpt-oss endpoint's certificate does not match its host (trainium-agent-labs/gptoss/README.md).
+    r = httpx.post(f"{llm['base_url'].rstrip('/')}/chat/completions", json=body, timeout=900,
+                   verify=which != "gptoss")
     r.raise_for_status()
     # gpt-oss puts its hidden reasoning in a separate field; we only want the answer.
     text = r.json()["choices"][0]["message"].get("content") or ""
+    if not text and which == "gptoss":
+        raise RuntimeError(f"gpt-oss returned no answer (finish_reason={r.json()['choices'][0].get('finish_reason')})")
     return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
 
 
@@ -38,6 +42,6 @@ def available(which="qwen"):
     if not url:
         return False
     try:
-        return httpx.get(f"{url.rstrip('/')}/models", timeout=5).status_code == 200
+        return httpx.get(f"{url.rstrip('/')}/models", timeout=5, verify=which != "gptoss").status_code == 200
     except httpx.HTTPError:
         return False
