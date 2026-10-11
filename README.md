@@ -25,9 +25,9 @@ the detector plus SAM, not checked by a person. Details and caveats: [`submissio
 
 | Where | What runs there |
 |---|---|
-| Each teammate's laptop | The web UI (`http://localhost:8080`, for that person only) and the bridge CLI. No database: every read and write is a `kubectl exec` into the cluster |
+| Each teammate's laptop | The web UI (`http://localhost:8080`, for that person only) and the bridge CLI. The web UI keeps no database: every read and write is a `kubectl exec` into the cluster |
 | seat-145 (Trainium2) | Qwen3-8B (vLLM): plans training rounds and picks the model to deploy. The team database (MongoDB/FiftyOne). The model registry (weights, metrics and reports of every published run) |
-| seat-146 (Trainium2) | gpt-oss-20b (vLLM, BF16): writes the analysis section of each run report |
+| seat-146 (Trainium2) | gpt-oss-20b (vLLM, BF16), which wrote the analysis in the published run reports |
 | seats 145–149 (CPUs) | YOLO11-OBB training, five runs in parallel (YOLO cannot train on Trainium) |
 | seat-149 | Auto-labeler (OWLv2 / Grounding DINO) and SAM box refinement |
 
@@ -36,8 +36,10 @@ through `kubectl exec`, and files move in checksummed 1 MB pieces because the cl
 
 ## 1. Data and storage
 
-- One FiftyOne database on seat-145 holds all images, labels, the labeling queue, training runs and logs.
-- Laptops only cache image files they have displayed.
+- One FiftyOne database on seat-145 holds all images, labels, the labeling queue and logs; the web UI reads
+  and writes only this database and caches nothing but image files.
+- The bridge on `main` still records the training runs it starts in a local database on the laptop that runs
+  it; the published runs are in the registry on seat-145.
 - Secrets (AWS keys, tokens) live only in a `.env` file (see `.env.example`). Nothing secret is committed.
 
 ## 2. Web UI (runs locally)
@@ -68,7 +70,8 @@ through `kubectl exec`, and files move in checksummed 1 MB pieces because the cl
 - **Qwen3-8B** proposes each round's runs; a checker accepts or rejects them with reasons that go back into
   the next attempt (3 tries, then a fixed schedule). It also picks the model to deploy, which must pass a
   smoke test.
-- **gpt-oss-20b** writes each report's analysis from the computed metrics and findings.
+- **gpt-oss-20b** wrote the analysis in the published run reports, from the computed metrics and findings.
+  On `main`, a new report uses gpt-oss when `GPTOSS_BASE_URL` is set in `.env`, and Qwen3-8B otherwise.
 
 ## 6. Metrics and reports
 
